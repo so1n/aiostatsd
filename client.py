@@ -92,8 +92,11 @@ class Client:
             self,
             key: str,
             value: int = 0,
-            timestamp: int = time.time()
+            timestamp: int = time.time(),
+            interval: int = 10
     ) -> NoReturn:
+        """interval: Multiple clients timestamp interval synchronization"""
+        timestamp = int(timestamp) // interval * interval
         msg = "{} {} {}".format(key, value, timestamp)
         self.send(msg)
 
