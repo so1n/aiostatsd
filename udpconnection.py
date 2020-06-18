@@ -22,7 +22,7 @@ class UdpConnection(object):
         self._is_closing: bool = False
         self._is_close: bool = True
         self._debug = debug
-        self._protocol = _DatagramProtocol()
+        self._protocol: _DatagramProtocol = _DatagramProtocol()
         self._close_timeout = close_timeout
         if debug:
             self.sendto = self._sendto_debug
@@ -35,7 +35,7 @@ class UdpConnection(object):
             lambda: self._protocol,
             remote_addr=(self._host, self._port)
         )
-        logging.info(f'create conn: {self._host}:{self._port}')
+        logging.debug(f'create conn: {self._host}:{self._port}')
         self._is_close = False
 
     def _sendto(self, data: str) -> NoReturn:
@@ -64,7 +64,7 @@ class UdpConnection(object):
 
     async def _close(self) -> NoReturn:
         await self._protocol.close()
-        logging.info(f'close conn: {self._host}:{self._port}')
+        logging.debug(f'close conn: {self._host}:{self._port}')
 
 
 class _DatagramProtocol(DatagramProtocol):
@@ -90,5 +90,5 @@ class _DatagramProtocol(DatagramProtocol):
 
     def sendto(self, data: bytes) -> None:
         if self._transport is None:
-            return
+            raise ConnectionError('connection is close')
         self._transport.sendto(data)

@@ -57,6 +57,7 @@ class Client:
 
         try:
             await asyncio.wait_for(self._close(), timeout=self._close_timeout)
+            LOGGER.info(f'close aiostatsd {self}')
         except asyncio.TimeoutError:
             pass
 
@@ -70,23 +71,36 @@ class Client:
     async def _listen(self) -> NoReturn:
         try:
             while not self._closing:
-                await self._send()
+                if not self._queue.empty():
+                    await self._real_send()
+                await asyncio.sleep(0.01)
+        except Exception as e:
+            logging.error(f'aiostatsd listen error: {e}')
         finally:
             while not self._queue.empty():
-                await self._send()
+                await self._real_send()
             self._join_future.set_result(True)
 
-    async def _send(self) -> NoReturn:
+    async def _real_send(self) -> NoReturn:
         coro = self._queue.get()
         try:
             msg = await asyncio.wait_for(coro, timeout=self._read_timeout)
         except asyncio.TimeoutError:
-            pass
+            logging.error(f'aiostatsd get by queue timeout')
         else:
-            self.udp_connection.sendto(msg)
+            try:
+                self.udp_connection.sendto(msg)
+            except Exception as e:
+                logging.error(
+                    f'connection:{self.udp_connection}'
+                    f' send msd error:{e}, drop msg:{msg}'
+                )
 
     def send(self, msg: str) -> NoReturn:
-        self._queue.put_nowait(msg)
+        try:
+            self._queue.put_nowait(msg)
+        except Exception as e:
+            logging.error(f'aiostatsd put:{msg} to queue error:{e}')
 
     def send_graphite(
             self,
