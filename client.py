@@ -9,8 +9,9 @@ from contextlib import contextmanager
 from random import random
 from typing import Iterator, NoReturn, Optional, Union
 
-from protocol import StatsdProtocol
-from udpconnection import UdpConnection
+from statsd_protocol import StatsdProtocol
+from connection import Connection
+from transport_layer_protocol import Protocol
 
 LOGGER = logging.getLogger()
 
@@ -24,16 +25,17 @@ class Client:
         read_timeout: float = 0.5,
         close_timeout: Optional[float] = None,
         sample_rate: Union[float, int] = 1,
+        protocol: Protocol = Protocol.Udp
     ) -> NoReturn:
         self._queue: asyncio.Queue = asyncio.Queue()
         self._listen_future: Optional[asyncio.Future] = None
         self._join_future: Optional[asyncio.Future] = None
 
-        self._closing = True
-        self._read_timeout = read_timeout
-        self._close_timeout = close_timeout
-        self._sample_rate = sample_rate
-        self.udp_connection = UdpConnection(host, port)
+        self._closing: bool = True
+        self._read_timeout: float = read_timeout
+        self._close_timeout: float = close_timeout
+        self._sample_rate: Union[float, int] = sample_rate
+        self.connection: 'Connection' = Connection(host, port, protocol_flag=protocol)
 
     async def __aenter__(self) -> "Client":
         await self.connect()
@@ -46,11 +48,12 @@ class Client:
         pass
 
     async def connect(self) -> NoReturn:
-        await self.udp_connection.connect()
+        await self.connection.connect()
         self._closing = False
         self._queue = asyncio.Queue()
         self._listen_future = asyncio.ensure_future(self._listen())
         self._join_future = asyncio.Future()
+        LOGGER.info(f'create aiostatsd client{self}')
 
     async def close(self) -> NoReturn:
         self._closing = True
@@ -66,7 +69,7 @@ class Client:
         self._listen_future.cancel()
         self._listen_future = None
         self._join_future = None
-        await self.udp_connection.close()
+        await self.connection.close()
 
     async def _listen(self) -> NoReturn:
         try:
@@ -89,10 +92,10 @@ class Client:
             logging.error(f'aiostatsd get by queue timeout')
         else:
             try:
-                self.udp_connection.sendto(msg)
+                self.connection.sendto(msg)
             except Exception as e:
                 logging.error(
-                    f'connection:{self.udp_connection}'
+                    f'connection:{self.connection}'
                     f' send msd error:{e}, drop msg:{msg}'
                 )
 
