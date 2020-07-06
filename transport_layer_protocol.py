@@ -13,8 +13,14 @@ logger = logging.getLogger()
 
 
 class Protocol(Enum):
-    Tcp = 1
-    Udp = 2
+    tcp = 1
+    udp = 2
+
+    def __str__(self):
+        return "%s" % self._name_
+
+    def __repr__(self):
+        return "%s" % self._name_
 
 
 class _TransportMixin(asyncio.BaseProtocol):
@@ -23,20 +29,28 @@ class _TransportMixin(asyncio.BaseProtocol):
         self._transport: Union[asyncio.Transport, asyncio.DatagramTransport, None] = None
         self._future: Optional[asyncio.Future] = None
 
+        self._before_event = []
+        self._after_event = []
+
         self._keep_alive_future: Optional[asyncio.Future] = None
         self._timeout = timeout
-        if self._timeout > 0:
-            self._keep_alive_future: asyncio.Future = asyncio.ensure_future(self._call_later(self._close))
+        self._loop = asyncio.get_event_loop()
 
-    async def _call_later(self, func):
-        """If running in uvicorn, the loop may not be running, can not use loop._call_later"""
-        await asyncio.sleep(self._timeout)
-        await func()
-
-    def keep_alive(self):
         if self._timeout:
+            self._before_event.append(self.create_keep_alive)
+            self._after_event.append(self.cancel_keep_alive)
+
+    def timeout_handle(self):
+        self._close()
+        raise asyncio.TimeoutError(f'No response data received within {self._timeout} seconds')
+
+    def cancel_keep_alive(self):
+        if self._keep_alive_future:
             self._keep_alive_future.cancel()
-            self._keep_alive_future = asyncio.ensure_future(self._call_later(self._close))
+            self._keep_alive_future = None
+
+    def create_keep_alive(self):
+        self._keep_alive_future = self._loop.call_later(self._timeout, self.timeout_handle)
 
     async def close(self) -> None:
         self._close()
@@ -53,7 +67,7 @@ class _TransportMixin(asyncio.BaseProtocol):
 
     def is_closed(self) -> bool:
         if not self._future:
-            return False
+            return True
         return self._future.done()
 
     def connection_made(self, transport):
@@ -63,17 +77,22 @@ class _TransportMixin(asyncio.BaseProtocol):
     def connection_lost(self, _exc):
         self._close()
 
-    def check_transport(self):
+    def before_transport(self):
         if self._transport is None:
             raise ConnectionError('connection is close')
+        for fn in self._before_event:
+            fn()
+
+    def after_transport(self, data, *args, **kwargs):
+        logger.debug(f'receive data:{data} args:{args}')
+        for fn in self._after_event:
+            fn()
 
 
 class TcpProtocol(asyncio.Protocol, _TransportMixin):
 
     def data_received(self, data):
-        # TODO add data to queue
-        logger.debug(f'receive data:{data}')
-        self.keep_alive()
+        self.after_transport(data)
 
     def pause_reading(self):
         self._transport and self._transport.pause_reading()
@@ -82,22 +101,23 @@ class TcpProtocol(asyncio.Protocol, _TransportMixin):
         self._transport and self._transport.resume_reading()
 
     def eof_received(self):
+        logger.debug(f'{self} receive `EOF` flag')
         self._close()
 
     def send(self, data: bytes) -> None:
-        self.check_transport()
+        self.before_transport()
         self._transport.write(data)
 
 
 class DatagramProtocol(asyncio.DatagramProtocol, _TransportMixin):
 
     def datagram_received(self, data: bytes, peer_name: str, *arg):
-        logger.debug(f'receive data:{data} form:{peer_name}')
-        self.keep_alive()
+        self.after_transport(data, peer_name)
 
     def error_received(self, exc):
+        self._close()
         raise exc
 
     def send(self, data: bytes) -> None:
-        self.check_transport()
+        self.before_transport()
         self._transport.sendto(data)

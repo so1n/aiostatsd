@@ -22,10 +22,12 @@ class Client:
         self,
         host: str = "localhost",
         port: int = 8125,
+        timeout: int = 0,
+        debug: bool = False,
         read_timeout: float = 0.5,
         close_timeout: Optional[float] = None,
         sample_rate: Union[float, int] = 1,
-        protocol: Protocol = Protocol.Udp
+        protocol: Protocol = Protocol.udp
     ) -> NoReturn:
         self._queue: asyncio.Queue = asyncio.Queue()
         self._listen_future: Optional[asyncio.Future] = None
@@ -35,7 +37,7 @@ class Client:
         self._read_timeout: float = read_timeout
         self._close_timeout: float = close_timeout
         self._sample_rate: Union[float, int] = sample_rate
-        self.connection: 'Connection' = Connection(host, port, protocol_flag=protocol)
+        self.connection: 'Connection' = Connection(host, port, protocol_flag=protocol, timeout=timeout, debug=debug)
 
     async def __aenter__(self) -> "Client":
         await self.connect()
