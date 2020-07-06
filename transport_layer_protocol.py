@@ -19,23 +19,22 @@ class Protocol(Enum):
 
 class _TransportMixin(asyncio.BaseProtocol):
 
-    def __init__(self, enable_keep_alive: bool = False) -> None:
+    def __init__(self, timeout: int = 0) -> None:
         self._transport: Union[asyncio.Transport, asyncio.DatagramTransport, None] = None
         self._future: Optional[asyncio.Future] = None
 
         self._keep_alive_future: Optional[asyncio.Future] = None
-        self._enable_keep_alive = enable_keep_alive
-        if enable_keep_alive:
+        self._timeout = timeout
+        if self._timeout > 0:
             self._keep_alive_future: asyncio.Future = asyncio.ensure_future(self._call_later(self._close))
 
-    @staticmethod
-    async def _call_later(func):
+    async def _call_later(self, func):
         """If running in uvicorn, the loop may not be running, can not use loop._call_later"""
-        await asyncio.sleep(60)
+        await asyncio.sleep(self._timeout)
         await func()
 
     def keep_alive(self):
-        if self._enable_keep_alive:
+        if self._timeout:
             self._keep_alive_future.cancel()
             self._keep_alive_future = asyncio.ensure_future(self._call_later(self._close))
 
