@@ -13,21 +13,22 @@ from statsd_protocol import StatsdProtocol
 from connection import Connection
 from transport_layer_protocol import Protocol
 
-LOGGER = logging.getLogger()
-
 
 class Client:
 
     def __init__(
-        self,
-        host: str = "localhost",
-        port: int = 8125,
-        timeout: int = 0,
-        debug: bool = False,
-        read_timeout: float = 0.5,
-        close_timeout: Optional[float] = None,
-        sample_rate: Union[float, int] = 1,
-        protocol: Protocol = Protocol.udp
+            self,
+            host: str = "localhost",
+            port: int = 8125,
+            protocol: Protocol = Protocol.udp,
+            sample_rate: Union[float, int] = 1,
+
+            timeout: int = 0,
+            debug: bool = False,
+            close_timeout: int = 5,
+            create_timeout: int = 5,
+            read_timeout: float = 0.5,
+            loop: Optional['asyncio.get_event_loop'] = None
     ) -> NoReturn:
         self._queue: asyncio.Queue = asyncio.Queue()
         self._listen_future: Optional[asyncio.Future] = None
@@ -37,7 +38,16 @@ class Client:
         self._read_timeout: float = read_timeout
         self._close_timeout: float = close_timeout
         self._sample_rate: Union[float, int] = sample_rate
-        self.connection: 'Connection' = Connection(host, port, protocol_flag=protocol, timeout=timeout, debug=debug)
+        self.connection: 'Connection' = Connection(
+            host,
+            port,
+            protocol,
+            debug,
+            timeout,
+            create_timeout,
+            close_timeout,
+            loop if loop else asyncio.get_event_loop()
+        )
 
     async def __aenter__(self) -> "Client":
         await self.connect()
@@ -46,23 +56,20 @@ class Client:
     async def __aexit__(self, *args) -> NoReturn:
         await self.close()
 
-    def __or__(self, other):
-        pass
-
     async def connect(self) -> NoReturn:
         await self.connection.connect()
         self._closing = False
         self._queue = asyncio.Queue()
         self._listen_future = asyncio.ensure_future(self._listen())
         self._join_future = asyncio.Future()
-        LOGGER.info(f'create aiostatsd client{self}')
+        logging.info(f'create aiostatsd client{self}')
 
     async def close(self) -> NoReturn:
         self._closing = True
 
         try:
             await asyncio.wait_for(self._close(), timeout=self._close_timeout)
-            LOGGER.info(f'close aiostatsd {self}')
+            logging.info(f'close aiostatsd {self}')
         except asyncio.TimeoutError:
             pass
 
@@ -107,6 +114,9 @@ class Client:
         except Exception as e:
             logging.error(f'aiostatsd put:{msg} to queue error:{e}')
 
+
+class GraphiteClient(Client):
+
     def send_graphite(
             self,
             key: str,
@@ -119,6 +129,9 @@ class Client:
         msg = "{} {} {}".format(key, value, timestamp)
         self.send(msg)
 
+
+class StatsdClient(Client):
+
     def send_statsd(
             self,
             statsd_protocol: 'StatsdProtocol',
@@ -128,7 +141,7 @@ class Client:
         if '\n' in msg:
             self.send(msg)
             if sample_rate:
-                LOGGER.warning('Multi-Metric not support sample rate')
+                logging.warning('Multi-Metric not support sample rate')
         else:
             sample_rate = sample_rate or self._sample_rate
             if sample_rate != 1 and random() > sample_rate:

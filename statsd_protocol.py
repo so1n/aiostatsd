@@ -12,23 +12,23 @@ class StatsdProtocol(object):
     def __init__(self):
         self.msg = ''
 
-    def __or__(self, other: str):
+    def _msg_handle(self, msg: str):
         if self.msg == '':
-            self.msg = other
-        self.msg += '\n' + other
+            self.msg = msg
+        self.msg += '\n' + msg
 
     def counter(self, key: str, value: int) -> 'StatsdProtocol':
-        self.msg = f'{key}:{value}|c'
+        self._msg_handle(f'{key}:{value}|c')
         return self
 
     def timer(self, key: str, value: int) -> 'StatsdProtocol':
-        self.msg = f'{key}:{value}|ms'
+        self._msg_handle(f'{key}:{value}|ms')
         return self
 
     def gauge(self, key: str, value: str) -> 'StatsdProtocol':
-        self.msg = f'{key}:{value}|g'
+        self._msg_handle(f'{key}:{value}|g')
         return self
 
     def sets(self, key: str, value: int) -> 'StatsdProtocol':
-        self.msg = f'{key}:{value}|s'
+        self._msg_handle(f'{key}:{value}|s')
         return self

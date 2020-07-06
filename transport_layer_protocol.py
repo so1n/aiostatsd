@@ -84,7 +84,7 @@ class _TransportMixin(asyncio.BaseProtocol):
             fn()
 
     def after_transport(self, data, *args, **kwargs):
-        logger.debug(f'receive data:{data} args:{args}')
+        logger.debug(f'receive data:{data} args:{args}, kwargs:{kwargs}')
         for fn in self._after_event:
             fn()
 

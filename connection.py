@@ -17,11 +17,11 @@ class Connection(object):
             host: str,
             port: int,
             protocol_flag: Protocol,
-            debug: bool = False,
-            timeout: int = 0,
-            create_timeout: int = 5,
-            close_timeout: int = 5,
-            loop: Optional['asyncio.get_event_loop'] = None
+            debug: bool,
+            timeout: int,
+            create_timeout: int,
+            close_timeout: int,
+            loop: 'asyncio.get_event_loop'
     ):
         self._is_closing: bool = False
         self._is_close: bool = True
@@ -29,7 +29,7 @@ class Connection(object):
         self._protocol_flag: Protocol = protocol_flag
         self._close_timeout: int = close_timeout
         self._create_timeout: int = create_timeout
-        self._loop = loop if loop else asyncio.get_event_loop()
+        self._loop = loop
 
         self._connection_info = f'{protocol_flag}://{host}:{port}'
         if protocol_flag == Protocol.udp:
