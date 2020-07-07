@@ -5,10 +5,8 @@ __date__ = '2020-02'
 import asyncio
 import logging
 
-from typing import Optional, NoReturn
-from transport_layer_protocol import DatagramProtocol, TcpProtocol, Protocol
-
-logger = logging.getLogger()
+from typing import NoReturn
+from transport_layer_protocol import DatagramProtocol, TcpProtocol, ProtocolFlag
 
 
 class Connection(object):
@@ -16,7 +14,7 @@ class Connection(object):
             self,
             host: str,
             port: int,
-            protocol_flag: Protocol,
+            protocol_flag: ProtocolFlag,
             debug: bool,
             timeout: int,
             create_timeout: int,
@@ -26,19 +24,19 @@ class Connection(object):
         self._is_closing: bool = False
         self._is_close: bool = True
         self._debug: bool = debug
-        self._protocol_flag: Protocol = protocol_flag
+        self._protocol_flag: ProtocolFlag = protocol_flag
         self._close_timeout: int = close_timeout
         self._create_timeout: int = create_timeout
         self._loop = loop
 
         self._connection_info = f'{protocol_flag}://{host}:{port}'
-        if protocol_flag == Protocol.udp:
+        if protocol_flag == ProtocolFlag.udp:
             self._protocol: DatagramProtocol = DatagramProtocol(timeout=timeout)
             self._connection = self._loop.create_datagram_endpoint(
                 lambda: self._protocol,
                 remote_addr=(host, port)
             )
-        elif protocol_flag == Protocol.tcp:
+        elif protocol_flag == ProtocolFlag.tcp:
             self._protocol: TcpProtocol = TcpProtocol(timeout=timeout)
             self._connection = self._loop.create_connection(
                 lambda: self._protocol,

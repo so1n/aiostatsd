@@ -8,11 +8,11 @@ from enum import Enum
 
 from typing import Optional, Union
 
-__all__ = ['Protocol', 'TcpProtocol', 'DatagramProtocol']
+__all__ = ['ProtocolFlag', 'TcpProtocol', 'DatagramProtocol']
 logger = logging.getLogger()
 
 
-class Protocol(Enum):
+class ProtocolFlag(Enum):
     tcp = 1
     udp = 2
 
@@ -23,7 +23,7 @@ class Protocol(Enum):
         return "%s" % self._name_
 
 
-class _TransportMixin(asyncio.BaseProtocol):
+class _ProtocolMixin(asyncio.BaseProtocol):
 
     def __init__(self, timeout: int = 0) -> None:
         self._transport: Union[asyncio.Transport, asyncio.DatagramTransport, None] = None
@@ -89,7 +89,7 @@ class _TransportMixin(asyncio.BaseProtocol):
             fn()
 
 
-class TcpProtocol(asyncio.Protocol, _TransportMixin):
+class TcpProtocol(asyncio.Protocol, _ProtocolMixin):
 
     def data_received(self, data):
         self.after_transport(data)
@@ -109,7 +109,7 @@ class TcpProtocol(asyncio.Protocol, _TransportMixin):
         self._transport.write(data)
 
 
-class DatagramProtocol(asyncio.DatagramProtocol, _TransportMixin):
+class DatagramProtocol(asyncio.DatagramProtocol, _ProtocolMixin):
 
     def datagram_received(self, data: bytes, peer_name: str, *arg):
         self.after_transport(data, peer_name)

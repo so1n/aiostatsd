@@ -9,9 +9,10 @@ from contextlib import contextmanager
 from random import random
 from typing import Iterator, NoReturn, Optional, Union
 
-from statsd_protocol import StatsdProtocol
 from connection import Connection
-from transport_layer_protocol import Protocol
+from protocol import StatsdProtocol
+from protocol import DogStatsdProtocol
+from transport_layer_protocol import ProtocolFlag
 
 
 class Client:
@@ -20,8 +21,7 @@ class Client:
             self,
             host: str = "localhost",
             port: int = 8125,
-            protocol: Protocol = Protocol.udp,
-            sample_rate: Union[float, int] = 1,
+            protocol: ProtocolFlag = ProtocolFlag.udp,
 
             timeout: int = 0,
             debug: bool = False,
@@ -37,7 +37,6 @@ class Client:
         self._closing: bool = True
         self._read_timeout: float = read_timeout
         self._close_timeout: float = close_timeout
-        self._sample_rate: Union[float, int] = sample_rate
         self.connection: 'Connection' = Connection(
             host,
             port,
@@ -117,6 +116,31 @@ class Client:
 
 class GraphiteClient(Client):
 
+    def __init__(
+            self,
+            host: str = "localhost",
+            port: int = 2003,
+            protocol: ProtocolFlag = ProtocolFlag.udp,
+
+            timeout: int = 0,
+            debug: bool = False,
+            close_timeout: int = 5,
+            create_timeout: int = 5,
+            read_timeout: float = 0.5,
+            loop: Optional['asyncio.get_event_loop'] = None
+    ) -> NoReturn:
+        super().__init__(
+            host=host,
+            port=port,
+            protocol=protocol,
+            timeout=timeout,
+            debug=debug,
+            close_timeout=close_timeout,
+            create_timeout=create_timeout,
+            read_timeout=read_timeout,
+            loop=loop
+        )
+
     def send_graphite(
             self,
             key: str,
@@ -132,21 +156,48 @@ class GraphiteClient(Client):
 
 class StatsdClient(Client):
 
+    def __init__(
+            self,
+            host: str = "localhost",
+            port: int = 8125,
+            protocol: ProtocolFlag = ProtocolFlag.udp,
+            sample_rate: Union[float, int] = 1,
+
+            timeout: int = 0,
+            debug: bool = False,
+            close_timeout: int = 5,
+            create_timeout: int = 5,
+            read_timeout: float = 0.5,
+            loop: Optional['asyncio.get_event_loop'] = None
+    ) -> NoReturn:
+        super().__init__(
+            host=host,
+            port=port,
+            protocol=protocol,
+            timeout=timeout,
+            debug=debug,
+            close_timeout=close_timeout,
+            create_timeout=create_timeout,
+            read_timeout=read_timeout,
+            loop=loop
+        )
+        self._sample_rate = sample_rate
+
     def send_statsd(
             self,
             statsd_protocol: 'StatsdProtocol',
             sample_rate: Union[int, float, None] = None
     ) -> NoReturn:
         msg = statsd_protocol.msg
-        if '\n' in msg:
-            self.send(msg)
-            if sample_rate:
-                logging.warning('Multi-Metric not support sample rate')
+        if '\n' in msg and sample_rate:
+            logging.warning('Multi-Metric not support sample rate')
         else:
             sample_rate = sample_rate or self._sample_rate
             if sample_rate != 1 and random() > sample_rate:
                 msg += f'|@{sample_rate}'
-                self.send(msg)
+            else:
+                return
+        self.send(msg)
 
     def counter(
             self,
@@ -169,7 +220,7 @@ class StatsdClient(Client):
     def gauge(
             self,
             key: str,
-            value: str,
+            value: int,
             sample_rate: Union[int, float, None] = None
     ) -> NoReturn:
         statsd_protocol = StatsdProtocol().gauge(key, value)
@@ -198,3 +249,122 @@ class StatsdClient(Client):
         yield
         value = (_loop.time() - started_at) * 1000
         self.timer(key, value, sample_rate)
+
+
+class DogStatsdClient(Client):
+
+    def __init__(
+            self,
+            host: str = "localhost",
+            port: int = 8125,
+            protocol: ProtocolFlag = ProtocolFlag.udp,
+            sample_rate: Union[float, int] = 1,
+            tag_dict: Optional[dict] = None,
+
+            timeout: int = 0,
+            debug: bool = False,
+            close_timeout: int = 5,
+            create_timeout: int = 5,
+            read_timeout: float = 0.5,
+            loop: Optional['asyncio.get_event_loop'] = None
+    ) -> NoReturn:
+        super().__init__(
+            host=host,
+            port=port,
+            protocol=protocol,
+            timeout=timeout,
+            debug=debug,
+            close_timeout=close_timeout,
+            create_timeout=create_timeout,
+            read_timeout=read_timeout,
+            loop=loop
+        )
+        self._sample_rate = sample_rate
+
+    def send_dog_statsd(
+            self,
+            dog_statsd_protocol: 'DogStatsdProtocol',
+            sample_rate: Union[int, float, None] = None
+    ) -> NoReturn:
+        for msg in dog_statsd_protocol.get_msg_list():
+            sample_rate = sample_rate or self._sample_rate
+            if sample_rate != 1 and random() > sample_rate:
+                msg += f'|@{sample_rate}'
+            else:
+                continue
+            self.send(msg)
+
+    def gauge(
+            self,
+            key: str,
+            value: int,
+            sample_rate: Union[int, float, None] = None,
+            tag_dict: Optional[dict] = None
+    ) -> NoReturn:
+        protocol = DogStatsdProtocol().gauge(key, value, tag_dict)
+        return self.send_dog_statsd(protocol, sample_rate)
+
+    def increment(
+            self,
+            key: str,
+            value: int,
+            sample_rate: Union[int, float, None] = None,
+            tag_dict: Optional[dict] = None
+    ) -> NoReturn:
+        protocol = DogStatsdProtocol().increment(key, value, tag_dict)
+        return self.send_dog_statsd(protocol, sample_rate)
+
+    def decrement(
+            self,
+            key: str,
+            value: int,
+            sample_rate: Union[int, float, None] = None,
+            tag_dict: Optional[dict] = None
+    ) -> NoReturn:
+        protocol = DogStatsdProtocol().increment(key, value, tag_dict)
+        return self.send_dog_statsd(protocol, sample_rate)
+
+    def timer(
+            self,
+            key: str,
+            value: Union[int, float],
+            sample_rate: Union[int, float, None] = None,
+            tag_dict: Optional[dict] = None
+    ) -> NoReturn:
+        protocol = DogStatsdProtocol().timer(key, value, tag_dict)
+        return self.send_dog_statsd(protocol, sample_rate)
+
+    @contextmanager
+    def timeit(
+            self,
+            key: str,
+            sample_rate: Union[int, float, None] = None
+    ) -> Iterator[None]:
+        """
+        Context manager for easily timing methods.
+        """
+        _loop = asyncio.get_event_loop()
+        started_at = _loop.time()
+        yield
+        value = (_loop.time() - started_at) * 1000
+        self.timer(key, value, sample_rate)
+
+    def histogram(
+            self,
+            key: str,
+            value: Union[int, float],
+            sample_rate: Union[int, float, None] = None,
+            tag_dict: Optional[dict] = None
+    ) -> NoReturn:
+        protocol = DogStatsdProtocol().histogram(key, value, tag_dict)
+        return self.send_dog_statsd(protocol, sample_rate)
+
+    def distribution(
+            self,
+            key: str,
+            value: Union[int, float],
+            sample_rate: Union[int, float, None] = None,
+            tag_dict: Optional[dict] = None
+    ) -> NoReturn:
+        protocol = DogStatsdProtocol().distribution(key, value, tag_dict)
+        return self.send_dog_statsd(protocol, sample_rate)
