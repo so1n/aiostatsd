@@ -10,6 +10,7 @@ from random import random
 from typing import Iterator, NoReturn, Optional, Union
 
 from connection import Connection
+from pool import Pool
 from protocol import StatsdProtocol
 from protocol import DogStatsdProtocol
 from transport_layer_protocol import ProtocolFlag
@@ -28,7 +29,9 @@ class Client:
             close_timeout: int = 5,
             create_timeout: int = 5,
             read_timeout: float = 0.5,
-            loop: Optional['asyncio.get_event_loop'] = None
+            loop: Optional['asyncio.get_event_loop'] = None,
+            min_size: Optional[int] = None,
+            max_size: Optional[int] = None,
     ) -> NoReturn:
         self._queue: asyncio.Queue = asyncio.Queue()
         self._listen_future: Optional[asyncio.Future] = None
@@ -37,15 +40,30 @@ class Client:
         self._is_close: bool = True
         self._read_timeout: float = read_timeout
         self._close_timeout: float = close_timeout
-        self.connection: 'Connection' = Connection(
-            host,
-            port,
-            protocol,
-            debug,
-            timeout,
-            create_timeout,
-            loop if loop else asyncio.get_event_loop()
-        )
+        self._loop = loop if loop else asyncio.get_event_loop()
+
+        if min_size and max_size:
+            self.connection: 'Pool' = Pool(
+                host,
+                port,
+                protocol,
+                debug,
+                timeout,
+                create_timeout,
+                self._loop,
+                min_size=min_size,
+                max_size=max_size
+            )
+        else:
+            self.connection: 'Connection' = Connection(
+                host,
+                port,
+                protocol,
+                debug,
+                timeout,
+                create_timeout,
+                self._loop,
+            )
 
     async def __aenter__(self) -> "Client":
         await self.connect()
