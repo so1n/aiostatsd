@@ -18,28 +18,24 @@ class Connection(object):
             debug: bool,
             timeout: int,
             create_timeout: int,
-            close_timeout: int,
             loop: 'asyncio.get_event_loop'
     ):
-        self._is_closing: bool = False
-        self._is_close: bool = True
         self._debug: bool = debug
         self._protocol_flag: ProtocolFlag = protocol_flag
-        self._close_timeout: int = close_timeout
         self._create_timeout: int = create_timeout
         self._loop = loop
 
         self._connection_info = f'{protocol_flag}://{host}:{port}'
         if protocol_flag == ProtocolFlag.udp:
-            self._protocol: DatagramProtocol = DatagramProtocol(timeout=timeout)
-            self._connection = self._loop.create_datagram_endpoint(
-                lambda: self._protocol,
+            self._connection: DatagramProtocol = DatagramProtocol(timeout=timeout)
+            self._connection_proxy = self._loop.create_datagram_endpoint(
+                lambda: self._connection,
                 remote_addr=(host, port)
             )
         elif protocol_flag == ProtocolFlag.tcp:
-            self._protocol: TcpProtocol = TcpProtocol(timeout=timeout)
-            self._connection = self._loop.create_connection(
-                lambda: self._protocol,
+            self._connection: TcpProtocol = TcpProtocol(timeout=timeout)
+            self._connection_proxy = self._loop.create_connection(
+                lambda: self._connection,
                 host=host, port=port
             )
         else:
@@ -52,36 +48,23 @@ class Connection(object):
 
     async def connect(self) -> NoReturn:
         try:
-            await asyncio.wait_for(self._connection, timeout=self._create_timeout)
+            await asyncio.wait_for(self._connection_proxy, timeout=self._create_timeout)
         except asyncio.TimeoutError as e:
             raise TimeoutError(f'create connection:{self._connection_info} timeout') from e
         logging.debug(f'create connection:{self._connection_info}')
-        self._is_close = False
 
     def _sendto(self, data: str) -> NoReturn:
-        if not self._is_closing:
-            self._protocol.send(bytes(data, encoding="utf8"))
+        if not self.is_closed():
+            self._connection.send(bytes(data, encoding="utf8"))
 
     def _sendto_debug(self, data: str) -> NoReturn:
-        if not self._is_closing:
-            try:
-                logging.debug(f'send msg:{data}')
-                self._protocol.send(bytes(data, encoding="utf8"))
-            except Exception as e:
-                logging.error(f'send error. msg:{data} error:{e}')
+        if not self.is_closed():
+            logging.debug(f'send msg:{data}')
+            self._connection.send(bytes(data, encoding="utf8"))
 
-    def is_close(self) -> bool:
-        return self._is_close
+    def is_closed(self) -> bool:
+        return self._connection.is_closed()
 
     async def close(self) -> NoReturn:
-        self._is_closing = True
-        try:
-            await asyncio.wait_for(self._close(), timeout=self._close_timeout)
-            self._is_close = True
-        except asyncio.TimeoutError as e:
-            self._is_closing = False
-            raise e
-
-    async def _close(self) -> NoReturn:
-        await self._protocol.close()
+        await self._connection.close()
         logging.debug(f'close connection: {self._connection_info}')

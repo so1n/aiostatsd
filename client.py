@@ -34,7 +34,7 @@ class Client:
         self._listen_future: Optional[asyncio.Future] = None
         self._join_future: Optional[asyncio.Future] = None
 
-        self._closing: bool = True
+        self._is_close: bool = True
         self._read_timeout: float = read_timeout
         self._close_timeout: float = close_timeout
         self.connection: 'Connection' = Connection(
@@ -44,7 +44,6 @@ class Client:
             debug,
             timeout,
             create_timeout,
-            close_timeout,
             loop if loop else asyncio.get_event_loop()
         )
 
@@ -57,45 +56,43 @@ class Client:
 
     async def connect(self) -> NoReturn:
         await self.connection.connect()
-        self._closing = False
+        self._is_close = False
         self._queue = asyncio.Queue()
         self._listen_future = asyncio.ensure_future(self._listen())
-        self._join_future = asyncio.Future()
         logging.info(f'create aiostatsd client{self}')
 
     async def close(self) -> NoReturn:
-        self._closing = True
-
-        try:
-            await asyncio.wait_for(self._close(), timeout=self._close_timeout)
-            logging.info(f'close aiostatsd {self}')
-        except asyncio.TimeoutError:
-            pass
-
-    async def _close(self) -> NoReturn:
-        await self._join_future
         self._listen_future.cancel()
         self._listen_future = None
-        self._join_future = None
-        await self.connection.close()
+        await self._close()
+
+    async def _close(self):
+        if not self.connection.is_closed():
+            try:
+                await asyncio.wait_for(self._before_close(), timeout=self._close_timeout)
+            except asyncio.TimeoutError:
+                pass
+            await self.connection.close()
+        self._is_close = True
+
+    async def _before_close(self):
+        while not self._queue.empty():
+            await self._real_send()
 
     async def _listen(self) -> NoReturn:
         try:
-            while not self._closing:
+            while not self._is_close:
                 if not self._queue.empty():
                     await self._real_send()
-                await asyncio.sleep(0.01)
+                else:
+                    await asyncio.sleep(0.01)
         except Exception as e:
             logging.error(f'aiostatsd listen error: {e}')
-        finally:
-            while not self._queue.empty():
-                await self._real_send()
-            self._join_future.set_result(True)
+            await self._close()
 
     async def _real_send(self) -> NoReturn:
-        coro = self._queue.get()
         try:
-            msg = await asyncio.wait_for(coro, timeout=self._read_timeout)
+            msg = await asyncio.wait_for(self._queue.get(), timeout=self._read_timeout)
         except asyncio.TimeoutError:
             logging.error(f'aiostatsd get by queue timeout')
         else:
@@ -259,7 +256,6 @@ class DogStatsdClient(Client):
             port: int = 8125,
             protocol: ProtocolFlag = ProtocolFlag.udp,
             sample_rate: Union[float, int] = 1,
-            tag_dict: Optional[dict] = None,
 
             timeout: int = 0,
             debug: bool = False,
