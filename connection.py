@@ -54,17 +54,24 @@ class Connection(object):
         logging.debug(f'create connection:{self._connection_info}')
 
     def _sendto(self, data: str) -> NoReturn:
-        if not self.is_closed():
+        if not self.is_closed:
             self._connection.send(bytes(data, encoding="utf8"))
 
     def _sendto_debug(self, data: str) -> NoReturn:
-        if not self.is_closed():
+        if not self.is_closed:
             logging.debug(f'send msg:{data}')
             self._connection.send(bytes(data, encoding="utf8"))
 
+    @property
     def is_closed(self) -> bool:
-        return self._connection.is_closed()
+        return self._connection.is_closed
 
-    async def close(self) -> NoReturn:
-        await self._connection.close()
+    def close(self):
+        self._connection.close()
+
+    async def wait_closed(self):
+        await self._connection.wait_closed()
+
+    async def await_close(self):
+        await self._connection.await_close()
         logging.debug(f'close connection: {self._connection_info}')

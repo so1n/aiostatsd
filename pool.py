@@ -5,14 +5,40 @@ import asyncio
 import logging
 
 from collections import deque
-from typing import Deque, List, Set, Optional
+from typing import Coroutine, Deque, List, Set, Optional
 
 from connection import Connection
 from transport_layer_protocol import ProtocolFlag
 
 
+class CloseEvent:
+    def __init__(self, on_close):
+        self._close_init = asyncio.Event()
+        self._close_done = asyncio.Event()
+        self._on_close = on_close
+
+    async def wait(self):
+        await self._close_init.wait()
+        await self._close_done.wait()
+
+    def is_set(self):
+        return self._close_done.is_set() or self._close_init.is_set()
+
+    def set(self):
+        if self._close_init.is_set():
+            return
+
+        task = asyncio.ensure_future(self._on_close())
+        task.add_done_callback(self._cleanup)
+        self._close_init.set()
+
+    def _cleanup(self, *args):
+        self._on_close = None
+        self._close_done.set()
+
+
 class Pool(object):
-    """design like aioredis.pool"""
+    """Simple connection pool, design like aioredis.pool"""
     def __init__(
             self,
             host: str,
@@ -38,6 +64,7 @@ class Pool(object):
 
         self._is_closed: bool = True
         self._cond = asyncio.Condition()
+        self._close_state = CloseEvent(self._do_close)
         self._pool: Deque[Connection] = deque(maxlen=max_size)
         self._used_set: Set[Connection] = set()
 
@@ -57,7 +84,7 @@ class Pool(object):
     def _drop_closed(self):
         for i in range(self.free_size):
             conn = self._pool[0]
-            if conn.is_closed():
+            if conn.is_closed:
                 self._pool.popleft()
             else:
                 self._pool.rotate(-1)
@@ -72,15 +99,30 @@ class Pool(object):
         finally:
             self.release(conn)
 
-    async def close(self):
-        waiter_list: List[Connection] = []
-        while self._pool:
-            waiter_list.append(self._pool.popleft())
-        for conn in self._used_set:
-            waiter_list.append(conn)
-        await asyncio.gather(*waiter_list)
+    async def _do_close(self):
+        async with self._cond:
+            waiter_list: List[Coroutine] = []
+            while self._pool:
+                waiter_list.append(self._pool.popleft().await_close())
+            for conn in self._used_set:
+                waiter_list.append(conn.await_close())
+            await asyncio.gather(*waiter_list)
+            logging.debug("Closed %d connection(s)", len(waiter_list))
 
-        logging.debug("Closed %d connection(s)", len(waiter_list))
+    @property
+    def is_closed(self):
+        return self._close_state.is_set()
+
+    async def wait_closed(self):
+        await self._close_state.wait()
+
+    async def await_close(self):
+        self.close()
+        await self.wait_closed()
+
+    def close(self):
+        if not self._close_state.is_set():
+            self._close_state.set()
 
     async def connect(self):
         self._drop_closed()
@@ -118,7 +160,7 @@ class Pool(object):
         self._used_set.remove(conn)
         if conn.is_closed():
             asyncio.ensure_future(self._wakeup(conn))
-        elif self._max_size and self.free_size < self._max_size:
+        elif self.free_size < self._max_size:
             self._pool.append(conn)
             asyncio.ensure_future(self._wakeup())
         else:

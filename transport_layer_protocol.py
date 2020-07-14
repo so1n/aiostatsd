@@ -41,7 +41,6 @@ class _ProtocolMixin(asyncio.BaseProtocol):
             self._after_event.append(self.cancel_keep_alive)
 
     def timeout_handle(self):
-        self._close()
         raise asyncio.TimeoutError(f'No response data received within {self._timeout} seconds')
 
     def cancel_keep_alive(self):
@@ -52,19 +51,22 @@ class _ProtocolMixin(asyncio.BaseProtocol):
     def create_keep_alive(self):
         self._keep_alive_future = self._loop.call_later(self._timeout, self.timeout_handle)
 
-    async def close(self) -> None:
-        self._close()
+    async def await_close(self) -> None:
+        self.close()
+        await self.wait_closed()
+
+    async def wait_closed(self):
         await self._future
 
-    def _close(self):
+    def close(self):
         if self._transport is None:
             return
 
         if not self._transport.is_closing():
             self._transport.close()
             self._transport = None
-            self._future.set_result(True)
 
+    @property
     def is_closed(self) -> bool:
         if not self._future:
             return True
@@ -75,7 +77,11 @@ class _ProtocolMixin(asyncio.BaseProtocol):
         self._future = asyncio.Future()
 
     def connection_lost(self, _exc):
-        self._close()
+        if self._future.done():
+            return
+        self._future.set_result(True)
+        if _exc:
+            raise ConnectionError from _exc
 
     def before_transport(self):
         if self._transport is None:
@@ -91,18 +97,64 @@ class _ProtocolMixin(asyncio.BaseProtocol):
 
 class TcpProtocol(asyncio.Protocol, _ProtocolMixin):
 
+    def __init__(self, timeout: int = 0, loop=None):
+        super().__init__(timeout)
+        self._drain_waiter: Optional[asyncio.Future] = None
+        self._paused: bool = False
+        self._connection_lost: bool = False
+        self._loop = loop if loop else asyncio.get_event_loop()
+
     def data_received(self, data):
         self.after_transport(data)
 
     def pause_reading(self):
         self._transport and self._transport.pause_reading()
+        assert not self._paused
+        self._paused = True
+        if self._loop.get_debug():
+            logger.debug("%r pauses writing", self)
 
     def resume_reading(self):
         self._transport and self._transport.resume_reading()
+        self._paused = False
+        if self._loop.get_debug():
+            logger.debug("%r resumes writing", self)
+
+        if self._drain_waiter is not None:
+            if not self._drain_waiter.done():
+                self._drain_waiter.set_result(None)
+            self._drain_waiter = None
+
+    def connection_lost(self, exc):
+        super().connection_lost(exc)
+        self._connection_lost = True
+        # Wake up the writer if currently paused.
+        if not self._paused:
+            return
+
+        if self._drain_waiter is None:
+            return
+        if self._drain_waiter.done():
+            return
+        if exc is None:
+            self._drain_waiter.set_result(None)
+        else:
+            self._drain_waiter.set_exception(exc)
+        self._drain_waiter = None
+
+    async def drain(self):
+        if self._connection_lost:
+            raise ConnectionResetError('Connection lost')
+        if not self._paused:
+            return
+
+        assert self._drain_waiter is None or self._drain_waiter.cancelled()
+        self._drain_waiter = asyncio.Future()
+        await self._drain_waiter
 
     def eof_received(self):
         logger.debug(f'{self} receive `EOF` flag')
-        self._close()
+        self.close()
 
     def send(self, data: bytes) -> None:
         self.before_transport()
@@ -115,7 +167,7 @@ class DatagramProtocol(asyncio.DatagramProtocol, _ProtocolMixin):
         self.after_transport(data, peer_name)
 
     def error_received(self, exc):
-        self._close()
+        self.close()
         raise exc
 
     def send(self, data: bytes) -> None:

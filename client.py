@@ -30,40 +30,28 @@ class Client:
             create_timeout: int = 5,
             read_timeout: float = 0.5,
             loop: Optional['asyncio.get_event_loop'] = None,
-            min_size: Optional[int] = None,
-            max_size: Optional[int] = None,
     ) -> NoReturn:
         self._queue: asyncio.Queue = asyncio.Queue()
         self._listen_future: Optional[asyncio.Future] = None
         self._join_future: Optional[asyncio.Future] = None
 
         self._is_close: bool = True
+        self._is_listen: bool = False
         self._read_timeout: float = read_timeout
         self._close_timeout: float = close_timeout
         self._loop = loop if loop else asyncio.get_event_loop()
 
-        if min_size and max_size:
-            self.connection: 'Pool' = Pool(
-                host,
-                port,
-                protocol,
-                debug,
-                timeout,
-                create_timeout,
-                self._loop,
-                min_size=min_size,
-                max_size=max_size
-            )
-        else:
-            self.connection: 'Connection' = Connection(
-                host,
-                port,
-                protocol,
-                debug,
-                timeout,
-                create_timeout,
-                self._loop,
-            )
+        self._conn_config_dict = {
+            'host': host,
+            'port': port,
+            'protocol_flag': protocol,
+            'debug': debug,
+            'timeout': timeout,
+            'create_timeout': create_timeout,
+            'loop': self._loop
+        }
+
+        self.connection: Union[Pool, Connection, None] = None
 
     async def __aenter__(self) -> "Client":
         await self.connect()
@@ -73,24 +61,42 @@ class Client:
         await self.close()
 
     async def connect(self) -> NoReturn:
+        if not self._is_close or self.connection and not self.connection.is_closed:
+            raise ConnectionError(f'aiostatsd client already connected')
+        self.connection = Connection(**self._conn_config_dict)
+        await self._connect()
+
+    async def create_pool(self, min_size: int = 1, max_size: int = 10):
+        if not self._is_close or self.connection and not self.connection.is_closed:
+            raise ConnectionError(f'aiostatsd client already connected')
+        self.connection = Pool(
+            **self._conn_config_dict,
+            min_size=min_size,
+            max_size=max_size
+        )
+        await self._connect()
+
+    async def _connect(self):
         await self.connection.connect()
         self._is_close = False
         self._queue = asyncio.Queue()
+        self._is_listen = True
         self._listen_future = asyncio.ensure_future(self._listen())
         logging.info(f'create aiostatsd client{self}')
 
     async def close(self) -> NoReturn:
-        self._listen_future.cancel()
+        self._is_listen = False
+        await self._listen_future
         self._listen_future = None
         await self._close()
 
     async def _close(self):
-        if not self.connection.is_closed():
+        if not self.connection.is_closed:
             try:
                 await asyncio.wait_for(self._before_close(), timeout=self._close_timeout)
             except asyncio.TimeoutError:
                 pass
-            await self.connection.close()
+            await self.connection.await_close()
         self._is_close = True
 
     async def _before_close(self):
@@ -99,14 +105,15 @@ class Client:
 
     async def _listen(self) -> NoReturn:
         try:
-            while not self._is_close:
+            while self._is_listen:
                 if not self._queue.empty():
                     await self._real_send()
                 else:
                     await asyncio.sleep(0.01)
         except Exception as e:
-            logging.error(f'aiostatsd listen error: {e}')
-            await self._close()
+            if self._is_listen:
+                logging.error(f'aiostatsd listen error: {e}')
+                await self._close()
 
     async def _real_send(self) -> NoReturn:
         try:
