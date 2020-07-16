@@ -35,7 +35,6 @@ class Client:
         self._listen_future: Optional[asyncio.Future] = None
         self._join_future: Optional[asyncio.Future] = None
 
-        self._is_close: bool = True
         self._is_listen: bool = False
         self._read_timeout: float = read_timeout
         self._close_timeout: float = close_timeout
@@ -60,14 +59,18 @@ class Client:
     async def __aexit__(self, *args) -> NoReturn:
         await self.close()
 
+    @property
+    def is_closed(self):
+        return not (self.connection and not self.connection.is_closed)
+
     async def connect(self) -> NoReturn:
-        if not self._is_close or self.connection and not self.connection.is_closed:
+        if not self.is_closed:
             raise ConnectionError(f'aiostatsd client already connected')
         self.connection = Connection(**self._conn_config_dict)
         await self._connect()
 
     async def create_pool(self, min_size: int = 1, max_size: int = 10):
-        if not self._is_close or self.connection and not self.connection.is_closed:
+        if not self.is_closed:
             raise ConnectionError(f'aiostatsd client already connected')
         self.connection = Pool(
             **self._conn_config_dict,
@@ -78,7 +81,6 @@ class Client:
 
     async def _connect(self):
         await self.connection.connect()
-        self._is_close = False
         self._queue = asyncio.Queue()
         self._is_listen = True
         self._listen_future = asyncio.ensure_future(self._listen())
@@ -88,16 +90,14 @@ class Client:
         self._is_listen = False
         await self._listen_future
         self._listen_future = None
-        await self._close()
 
     async def _close(self):
-        if not self.connection.is_closed:
+        if not self.is_closed:
             try:
                 await asyncio.wait_for(self._before_close(), timeout=self._close_timeout)
             except asyncio.TimeoutError:
                 pass
             await self.connection.await_close()
-        self._is_close = True
 
     async def _before_close(self):
         while not self._queue.empty():
@@ -111,9 +111,9 @@ class Client:
                 else:
                     await asyncio.sleep(0.01)
         except Exception as e:
-            if self._is_listen:
-                logging.error(f'aiostatsd listen error: {e}')
-                await self._close()
+            logging.error(f'aiostatsd listen status:{self._is_listen} error: {e}')
+        finally:
+            await self._close()
 
     async def _real_send(self) -> NoReturn:
         try:
