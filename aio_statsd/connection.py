@@ -6,7 +6,7 @@ import asyncio
 import logging
 
 from typing import NoReturn
-from transport_layer_protocol import DatagramProtocol, TcpProtocol, ProtocolFlag
+from aio_statsd.transport_layer_protocol import DatagramProtocol, TcpProtocol, ProtocolFlag
 
 
 class Connection(object):

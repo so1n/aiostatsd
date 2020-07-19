@@ -7,8 +7,8 @@ import logging
 from collections import deque
 from typing import Coroutine, Deque, List, Set, Optional
 
-from connection import Connection
-from transport_layer_protocol import ProtocolFlag
+from aio_statsd.connection import Connection
+from aio_statsd.transport_layer_protocol import ProtocolFlag
 
 
 class CloseEvent:

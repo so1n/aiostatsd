@@ -57,37 +57,37 @@ class DogStatsdProtocol(object):
         return self._cache
 
     @staticmethod
-    def build_tag(tag_dict: Optional[dict]):
+    def build_tag(tag_dict: Optional[dict] = None):
         if not tag_dict:
             return ""
         return "|#" + ",".join(f"{k}:{v}" for k, v in tag_dict.items())
 
-    def gauge(self, key: str, value: int, tag_dict: Optional[dict]) -> 'DogStatsdProtocol':
+    def gauge(self, key: str, value: int, tag_dict: Optional[dict] = None) -> 'DogStatsdProtocol':
         msg = self._msg + f'{key}:{value}|g' + self.build_tag(tag_dict)
         self._cache.append(msg)
         return self
 
-    def increment(self, key: str, value: int, tag_dict: Optional[dict]) -> 'DogStatsdProtocol':
+    def increment(self, key: str, value: int, tag_dict: Optional[dict] = None) -> 'DogStatsdProtocol':
         msg = self._msg + f'{key}:{value}|c' + self.build_tag(tag_dict)
         self._cache.append(msg)
         return self
 
-    def decrement(self, key: str, value: int, tag_dict: Optional[dict]) -> 'DogStatsdProtocol':
+    def decrement(self, key: str, value: int, tag_dict: Optional[dict] = None) -> 'DogStatsdProtocol':
         msg = self._msg + f'{key}:-{value}|c' + self.build_tag(tag_dict)
         self._cache.append(msg)
         return self
 
-    def timer(self, key: str, value: int, tag_dict: Optional[dict]) -> 'DogStatsdProtocol':
+    def timer(self, key: str, value: int, tag_dict: Optional[dict] = None) -> 'DogStatsdProtocol':
         msg = self._msg + f'{key}:{value}|ms' + self.build_tag(tag_dict)
         self._cache.append(msg)
         return self
 
-    def histogram(self, key: str, value: int, tag_dict: Optional[dict]) -> 'DogStatsdProtocol':
+    def histogram(self, key: str, value: int, tag_dict: Optional[dict] = None) -> 'DogStatsdProtocol':
         msg = self._msg + f'{key}:{value}|h' + self.build_tag(tag_dict)
         self._cache.append(msg)
         return self
 
-    def distribution(self, key: str, value: int, tag_dict: Optional[dict]) -> 'DogStatsdProtocol':
+    def distribution(self, key: str, value: int, tag_dict: Optional[dict] = None) -> 'DogStatsdProtocol':
         msg = self._msg + f'{key}:{value}|d' + self.build_tag(tag_dict)
         self._cache.append(msg)
         return self

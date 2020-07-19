@@ -9,11 +9,11 @@ from contextlib import contextmanager
 from random import random
 from typing import Iterator, NoReturn, Optional, Union
 
-from connection import Connection
-from pool import Pool
-from protocol import StatsdProtocol
-from protocol import DogStatsdProtocol
-from transport_layer_protocol import ProtocolFlag
+from aio_statsd.connection import Connection
+from aio_statsd.pool import Pool
+from aio_statsd.protocol import StatsdProtocol
+from aio_statsd.protocol import DogStatsdProtocol
+from aio_statsd.transport_layer_protocol import ProtocolFlag
 
 
 class Client:
