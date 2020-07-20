@@ -29,8 +29,8 @@ from aio_statsd import StatsdClient
 
 loop = asyncio.get_event_loop()
 client = StatsdClient()
-client.gauge('test.key', 1)
 loop.run_until_complete(client.create_pool(max_size=5))
+client.gauge('test.key', 1)
 loop.run_forever()
 ```
 Use context manager(Now, not support connection pool)
@@ -93,8 +93,8 @@ from aio_statsd import GraphiteClient
 
 loop = asyncio.get_event_loop()
 client = GraphiteClient()
-client.send_graphite('test.key', 1)
-loop.run_until_complete(client.create_pool(max_size=5))
+loop.run_until_complete(client.connect())
+client.send_graphite('test.key', 1) # Multiple clients timestamp interval synchronization
 loop.run_forever()
 ```
 #### DogStatsD
