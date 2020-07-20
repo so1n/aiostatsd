@@ -7,6 +7,7 @@ import logging
 
 from typing import NoReturn
 from aio_statsd.transport_layer_protocol import DatagramProtocol, TcpProtocol, ProtocolFlag
+from aio_statsd.utlis import get_event_loop
 
 
 class Connection(object):
@@ -18,23 +19,22 @@ class Connection(object):
             debug: bool,
             timeout: int,
             create_timeout: int,
-            loop: 'asyncio.get_event_loop'
     ):
         self._debug: bool = debug
         self._protocol_flag: ProtocolFlag = protocol_flag
         self._create_timeout: int = create_timeout
-        self._loop = loop
 
         self._connection_info = f'{protocol_flag}://{host}:{port}'
+        _loop = get_event_loop()
         if protocol_flag == ProtocolFlag.udp:
             self._connection: DatagramProtocol = DatagramProtocol(timeout=timeout)
-            self._connection_proxy = self._loop.create_datagram_endpoint(
+            self._connection_proxy = _loop.create_datagram_endpoint(
                 lambda: self._connection,
                 remote_addr=(host, port)
             )
         elif protocol_flag == ProtocolFlag.tcp:
             self._connection: TcpProtocol = TcpProtocol(timeout=timeout)
-            self._connection_proxy = self._loop.create_connection(
+            self._connection_proxy = _loop.create_connection(
                 lambda: self._connection,
                 host=host, port=port
             )

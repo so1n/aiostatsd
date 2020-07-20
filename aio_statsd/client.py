@@ -14,6 +14,7 @@ from aio_statsd.pool import Pool
 from aio_statsd.protocol import StatsdProtocol
 from aio_statsd.protocol import DogStatsdProtocol
 from aio_statsd.transport_layer_protocol import ProtocolFlag
+from aio_statsd.utlis import get_event_loop
 
 
 class Client:
@@ -29,7 +30,6 @@ class Client:
             close_timeout: int = 5,
             create_timeout: int = 5,
             read_timeout: float = 0.5,
-            loop: Optional['asyncio.get_event_loop'] = None,
     ) -> NoReturn:
         self._queue: asyncio.Queue = asyncio.Queue()
         self._listen_future: Optional[asyncio.Future] = None
@@ -38,8 +38,6 @@ class Client:
         self._is_listen: bool = False
         self._read_timeout: float = read_timeout
         self._close_timeout: float = close_timeout
-        self._loop = loop if loop else asyncio.get_event_loop()
-
         self._conn_config_dict = {
             'host': host,
             'port': port,
@@ -47,7 +45,6 @@ class Client:
             'debug': debug,
             'timeout': timeout,
             'create_timeout': create_timeout,
-            'loop': self._loop
         }
 
         self.connection: Union[Pool, Connection, None] = None
@@ -149,7 +146,6 @@ class GraphiteClient(Client):
             close_timeout: int = 5,
             create_timeout: int = 5,
             read_timeout: float = 0.5,
-            loop: Optional['asyncio.get_event_loop'] = None
     ) -> NoReturn:
         super().__init__(
             host=host,
@@ -160,7 +156,6 @@ class GraphiteClient(Client):
             close_timeout=close_timeout,
             create_timeout=create_timeout,
             read_timeout=read_timeout,
-            loop=loop
         )
 
     def send_graphite(
@@ -190,7 +185,6 @@ class StatsdClient(Client):
             close_timeout: int = 5,
             create_timeout: int = 5,
             read_timeout: float = 0.5,
-            loop: Optional['asyncio.get_event_loop'] = None
     ) -> NoReturn:
         super().__init__(
             host=host,
@@ -201,7 +195,6 @@ class StatsdClient(Client):
             close_timeout=close_timeout,
             create_timeout=create_timeout,
             read_timeout=read_timeout,
-            loop=loop
         )
         self._sample_rate = sample_rate
 
@@ -266,7 +259,7 @@ class StatsdClient(Client):
         """
         Context manager for easily timing methods.
         """
-        _loop = asyncio.get_event_loop()
+        _loop = get_event_loop()
         started_at = _loop.time()
         yield
         value = (_loop.time() - started_at) * 1000
@@ -287,7 +280,6 @@ class DogStatsdClient(Client):
             close_timeout: int = 5,
             create_timeout: int = 5,
             read_timeout: float = 0.5,
-            loop: Optional['asyncio.get_event_loop'] = None
     ) -> NoReturn:
         super().__init__(
             host=host,
@@ -298,7 +290,6 @@ class DogStatsdClient(Client):
             close_timeout=close_timeout,
             create_timeout=create_timeout,
             read_timeout=read_timeout,
-            loop=loop
         )
         self._sample_rate = sample_rate
 

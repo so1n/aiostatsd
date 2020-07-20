@@ -47,7 +47,6 @@ class Pool(object):
             debug: bool,
             timeout: int,
             create_timeout: int,
-            loop: 'asyncio.get_event_loop',
             min_size: int = 1,
             max_size: int = 10,
     ):
@@ -57,7 +56,6 @@ class Pool(object):
         self._debug: bool = debug
         self._timeout: int = timeout
         self._create_timeout: int = create_timeout
-        self._loop = loop if loop else asyncio.get_event_loop()
 
         self._min_size = min_size
         self._max_size = max_size
@@ -135,7 +133,6 @@ class Pool(object):
                     self._debug,
                     self._timeout,
                     self._create_timeout,
-                    self._loop
                 )
                 await conn.connect()
                 self._pool.append(conn)
