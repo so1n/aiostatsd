@@ -21,7 +21,7 @@ client.gauge('test.key', 1)
 loop.run_forever()
 ```
 Create Connection Pool and use
-`nax_size=5:` The maximum number of connections in the connection pool
+`max_size=5:` The maximum number of connections in the connection pool
 ```Python
 import asyncio
 from aio_statsd import StatsdClient
@@ -55,7 +55,7 @@ loop.run_until_complete(main())
 - close_timeout: default value 5, Within a few seconds after the client is closed, continue to send messages which in the queue
 - create_timeout: default value 5, Createe connection timeout
 - read_timeout: default value 0.5, read messages from queue timeout
-- sample_rate(Statsd, DogStatsd): default value 1, use sample rate in Statsd
+- sample_rate(Use in StatsD Client, DogStatsD Client): default value 1, use sample rate in Statsd or DogStatsD
 ### send metric
 ```Python
 import asyncio
@@ -69,12 +69,12 @@ async def main():
         client.sets('test.key', 1)
         client.timer('test.key', 1)
         with client.timeit('test'):
-            pass  # run action
+            pass  # run your code
         
         # all metric support sample rate
         client.gauge('test1.key', 1, sample_rate=0.5)
         
-        # mutli metric support(not support sample rate)
+        # mutli metric support(not support sample rate, the sample rate will always be set to 1)
         from aio_statsd import StatsdProtocol
         metric = StatsdProtocol()   
         metric.gauge('test2.key', 1)
@@ -112,7 +112,7 @@ async def main():
         client.histogram('test.key', 1)
         client.timer('test.key', 1)
         with client.timeit('test'):
-            pass  # run action
+            pass  # run your code
         
         # all metric support sample rate and DogStatsD tag
         client.gauge('test1.key', 1, sample_rate=0.5, tag_dict={'tag': 'tag1'})
@@ -130,3 +130,5 @@ async def main():
 loop = asyncio.get_event_loop()
 loop.run_until_complete(main())
 ```
+### Use in web frameworks
+[fastapi example](https://github.com/so1n/fastapi-tools/blob/master/example/statsd_middleware.py)
