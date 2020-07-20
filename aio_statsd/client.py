@@ -215,9 +215,9 @@ class StatsdClient(Client):
             logging.warning('Multi-Metric not support sample rate')
         else:
             sample_rate = sample_rate or self._sample_rate
-            if sample_rate != 1 and random() > sample_rate:
+            if random() > sample_rate:
                 msg += f'|@{sample_rate}'
-            else:
+            elif sample_rate > 1:
                 return
         self.send(msg)
 
