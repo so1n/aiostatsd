@@ -5,7 +5,7 @@ with open("README.md", "r") as fh:
 
 setuptools.setup(
     name="aio_statsd",
-    version="0.1.1",
+    version="0.1.3",
     author="so1n",
     author_email="so1n897046026@example.com",
     description="Simple and fast statsd async client",

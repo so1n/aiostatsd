@@ -20,7 +20,8 @@ class StatsdProtocol(object):
     def _msg_handle(self, msg: str):
         if self.msg == '':
             self.msg = msg
-        self.msg += '\n' + msg
+        else:
+            self.msg += '\n' + msg
         if len(self.msg) > self._mtu_limit:
             logging.warning(
                 f'msg length > mtu max length limit:{self._mtu_limit}'
