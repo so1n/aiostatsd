@@ -53,8 +53,8 @@ loop.run_until_complete(main())
 - timeout: default value 0, send msg timeout, if timeout==0, not enable timeout
 - debug: default value False, enable debug
 - close_timeout: default value 5, Within a few seconds after the client is closed, continue to send messages which in the queue
-- create_timeout: default value 5, Createe connection timeout
-- read_timeout: default value 0.5, read messages from queue timeout
+- create_timeout: default value 5, Create connection timeout
+- max_len: default value 10000, deque length
 - sample_rate(Use in StatsD Client, DogStatsD Client): default value 1, use sample rate in Statsd or DogStatsD
 ### send metric
 ```Python

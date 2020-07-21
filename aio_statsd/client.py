@@ -5,6 +5,7 @@ __date__ = '2020-02'
 import asyncio
 import logging
 import time
+from collections import deque
 from contextlib import contextmanager
 from random import random
 from typing import Iterator, NoReturn, Optional, Union
@@ -29,14 +30,15 @@ class Client:
             debug: bool = False,
             close_timeout: int = 5,
             create_timeout: int = 5,
-            read_timeout: float = 0.5,
+            max_len: int = 1000,
     ) -> NoReturn:
-        self._queue: asyncio.Queue = asyncio.Queue()
+        self._queue_empty = object()
+        self._max_len = max_len
+        self._queue: Optional[deque] = None
         self._listen_future: Optional[asyncio.Future] = None
         self._join_future: Optional[asyncio.Future] = None
 
         self._is_listen: bool = False
-        self._read_timeout: float = read_timeout
         self._close_timeout: float = close_timeout
         self._conn_config_dict = {
             'host': host,
@@ -78,7 +80,7 @@ class Client:
 
     async def _connect(self):
         await self.connection.connect()
-        self._queue = asyncio.Queue()
+        self._queue = deque(maxlen=self._max_len)
         self._is_listen = True
         self._listen_future = asyncio.ensure_future(self._listen())
         logging.info(f'create aiostatsd client{self}')
@@ -96,15 +98,26 @@ class Client:
                 pass
             await self.connection.await_close()
 
+    def _get_by_queue(self) -> Union[object, str]:
+        try:
+            return self._queue.pop()
+        except IndexError:
+            return self._queue_empty
+
     async def _before_close(self):
-        while not self._queue.empty():
-            await self._real_send()
+        while True:
+            value = self._get_by_queue()
+            if value is not self._queue_empty:
+                await self._real_send(value)
+            else:
+                break
 
     async def _listen(self) -> NoReturn:
         try:
             while self._is_listen:
-                if not self._queue.empty():
-                    await self._real_send()
+                value = self._get_by_queue()
+                if value is not self._queue_empty:
+                    await self._real_send(value)
                 else:
                     await asyncio.sleep(0.01)
         except Exception as e:
@@ -112,23 +125,21 @@ class Client:
         finally:
             await self._close()
 
-    async def _real_send(self) -> NoReturn:
+    async def _real_send(self, msg: str) -> NoReturn:
         try:
-            msg = await asyncio.wait_for(self._queue.get(), timeout=self._read_timeout)
-        except asyncio.TimeoutError:
-            logging.error(f'aiostatsd get by queue timeout')
-        else:
-            try:
-                self.connection.sendto(msg)
-            except Exception as e:
-                logging.error(
-                    f'connection:{self.connection}'
-                    f' send msd error:{e}, drop msg:{msg}'
-                )
+            self.connection.sendto(msg)
+        except Exception as e:
+            logging.error(f'connection:{self.connection}')
+            if len(self._queue) < self._queue.maxlen * 0.9:
+                self._queue.append(msg)
+                await asyncio.sleep(1)
+            else:
+                logging.error(f'send msd error:{e}, drop msg:{msg}')
 
     def send(self, msg: str) -> NoReturn:
         try:
-            self._queue.put_nowait(msg)
+            # if queue full, auto del last value(queue[-1])
+            self._queue.appendleft(msg)
         except Exception as e:
             logging.error(f'aiostatsd put:{msg} to queue error:{e}')
 
@@ -145,7 +156,7 @@ class GraphiteClient(Client):
             debug: bool = False,
             close_timeout: int = 5,
             create_timeout: int = 5,
-            read_timeout: float = 0.5,
+            max_len: int = 10000,
     ) -> NoReturn:
         super().__init__(
             host=host,
@@ -155,7 +166,7 @@ class GraphiteClient(Client):
             debug=debug,
             close_timeout=close_timeout,
             create_timeout=create_timeout,
-            read_timeout=read_timeout,
+            max_len=max_len,
         )
 
     def send_graphite(
@@ -184,7 +195,7 @@ class StatsdClient(Client):
             debug: bool = False,
             close_timeout: int = 5,
             create_timeout: int = 5,
-            read_timeout: float = 0.5,
+            max_len: int = 10000,
     ) -> NoReturn:
         super().__init__(
             host=host,
@@ -194,7 +205,7 @@ class StatsdClient(Client):
             debug=debug,
             close_timeout=close_timeout,
             create_timeout=create_timeout,
-            read_timeout=read_timeout,
+            max_len=max_len,
         )
         self._sample_rate = sample_rate
 
@@ -279,7 +290,7 @@ class DogStatsdClient(Client):
             debug: bool = False,
             close_timeout: int = 5,
             create_timeout: int = 5,
-            read_timeout: float = 0.5,
+            max_len: int = 10000
     ) -> NoReturn:
         super().__init__(
             host=host,
@@ -289,7 +300,7 @@ class DogStatsdClient(Client):
             debug=debug,
             close_timeout=close_timeout,
             create_timeout=create_timeout,
-            read_timeout=read_timeout,
+            max_len=max_len,
         )
         self._sample_rate = sample_rate
 
