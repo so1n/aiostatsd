@@ -131,4 +131,4 @@ loop = asyncio.get_event_loop()
 loop.run_until_complete(main())
 ```
 ### Use in web frameworks
-[fastapi example](https://github.com/so1n/fastapi-tools/blob/master/example/statsd_middleware.py)
+[fast_tools example](https://github.com/so1n/fast-tools/blob/master/example/statsd_middleware.py)
