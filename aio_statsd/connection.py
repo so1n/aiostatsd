@@ -28,23 +28,14 @@ class Connection(object):
         _loop = get_event_loop()
         if protocol_flag == ProtocolFlag.udp:
             self._connection: DatagramProtocol = DatagramProtocol(timeout=timeout)
-            self._connection_proxy = _loop.create_datagram_endpoint(
-                lambda: self._connection,
-                remote_addr=(host, port)
-            )
+            self._connection_proxy = _loop.create_datagram_endpoint(lambda: self._connection, remote_addr=(host, port))
         elif protocol_flag == ProtocolFlag.tcp:
             self._connection: TcpProtocol = TcpProtocol(timeout=timeout)
-            self._connection_proxy = _loop.create_connection(
-                lambda: self._connection,
-                host=host, port=port
-            )
+            self._connection_proxy = _loop.create_connection(lambda: self._connection, host=host, port=port)
         else:
             raise ConnectionError(f'Not support protocol:{protocol_flag}')
 
-        if debug:
-            self.sendto = self._sendto_debug
-        else:
-            self.sendto = self._sendto
+        self.sendto = self._sendto if not debug else self._sendto_debug
 
     async def connect(self) -> NoReturn:
         try:
