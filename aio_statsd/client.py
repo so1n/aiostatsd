@@ -8,7 +8,7 @@ import time
 from collections import deque
 from contextlib import contextmanager
 from random import random
-from typing import Iterator, NoReturn, Optional, Union
+from typing import Any, Dict, Iterator, NoReturn, Optional, Union
 
 from aio_statsd.connection import Connection
 from aio_statsd.protocol import StatsdProtocol
@@ -36,9 +36,9 @@ class Client:
         self._deque: Optional[deque] = None
         self._listen_future: Optional[asyncio.Future] = None
 
-        self._is_listen: bool = False
-        self._close_timeout: float = close_timeout
-        self._conn_config_dict = {
+        self.is_closed: bool = True
+        self._close_timeout: int = close_timeout
+        self._conn_config_dict: Dict[str, Any] = {
             'host': host,
             'port': port,
             'protocol_flag': protocol,
@@ -59,35 +59,38 @@ class Client:
                 if not self._deque:
                     break
                 await asyncio.sleep(0.1)
-        await asyncio.wait_for(await_deque_empty(), 9)
+        try:
+            await asyncio.wait_for(await_deque_empty(), 9)
+        except asyncio.TimeoutError:
+            pass
         await self.close()
 
-    @property
-    def is_closed(self):
-        return not (self.connection and not self.connection.is_closed)
-
     async def connect(self) -> NoReturn:
-        if not self.is_closed:
+        if self.is_closed:
             raise ConnectionError(f'aiostatsd client already connected')
         self.connection = Connection(**self._conn_config_dict)
-        await self._connect()
-
-    async def _connect(self):
         await self.connection.connect()
         self._deque = deque(maxlen=self._max_len)
-        self._is_listen = True
+        self.is_closed = False
         self._listen_future = asyncio.ensure_future(self._listen())
         logging.info(f'create aiostatsd client{self}')
 
     async def close(self) -> NoReturn:
-        self._is_listen = False
+        self.is_closed = False
         await self._listen_future
         self._listen_future = None
 
     async def _close(self):
         if not self.is_closed:
+            async def before_close():
+                while True:
+                    value = self._get_by_queue()
+                    if value is not self._queue_empty:
+                        await self._real_send(value)
+                    else:
+                        break
             try:
-                await asyncio.wait_for(self._before_close(), timeout=self._close_timeout)
+                await asyncio.wait_for(before_close(), timeout=self._close_timeout)
             except asyncio.TimeoutError:
                 pass
             await self.connection.await_close()
@@ -98,24 +101,16 @@ class Client:
         except IndexError:
             return self._queue_empty
 
-    async def _before_close(self):
-        while True:
-            value = self._get_by_queue()
-            if value is not self._queue_empty:
-                await self._real_send(value)
-            else:
-                break
-
     async def _listen(self) -> NoReturn:
         try:
-            while self._is_listen:
+            while not self.is_closed:
                 value = self._get_by_queue()
                 if value is not self._queue_empty:
                     await self._real_send(value)
                 else:
                     await asyncio.sleep(0.01)
         except Exception as e:
-            logging.error(f'aiostatsd listen status:{self._is_listen} error: {e}')
+            logging.error(f'aiostatsd listen status:{self.is_closed} error: {e}')
         finally:
             await self._close()
 
@@ -209,13 +204,14 @@ class StatsdClient(Client):
             sample_rate: Union[int, float, None] = None
     ) -> NoReturn:
         msg = statsd_protocol.msg
+        sample_rate = sample_rate or self._sample_rate
         if '\n' in msg and sample_rate:
             logging.warning('Multi-Metric not support sample rate')
         else:
-            sample_rate = sample_rate or self._sample_rate
             if random() > sample_rate:
                 msg += f'|@{sample_rate}'
             elif sample_rate > 1:
+                logging.warning('sample rate must > 0 & < 1')
                 return
         self.send(msg)
 
@@ -226,7 +222,7 @@ class StatsdClient(Client):
             sample_rate: Union[int, float, None] = None
     ) -> NoReturn:
         statsd_protocol = StatsdProtocol().counter(key, value)
-        return self.send_statsd(statsd_protocol, sample_rate)
+        self.send_statsd(statsd_protocol, sample_rate)
 
     def timer(
             self,
@@ -235,7 +231,7 @@ class StatsdClient(Client):
             sample_rate: Union[int, float, None] = None
     ) -> NoReturn:
         statsd_protocol = StatsdProtocol().timer(key, value)
-        return self.send_statsd(statsd_protocol, sample_rate)
+        self.send_statsd(statsd_protocol, sample_rate)
 
     def gauge(
             self,
@@ -244,7 +240,7 @@ class StatsdClient(Client):
             sample_rate: Union[int, float, None] = None
     ) -> NoReturn:
         statsd_protocol = StatsdProtocol().gauge(key, value)
-        return self.send_statsd(statsd_protocol, sample_rate)
+        self.send_statsd(statsd_protocol, sample_rate)
 
     def sets(
             self,
@@ -253,7 +249,7 @@ class StatsdClient(Client):
             sample_rate: Union[int, float, None] = None
     ) -> NoReturn:
         statsd_protocol = StatsdProtocol().sets(key, value)
-        return self.send_statsd(statsd_protocol, sample_rate)
+        self.send_statsd(statsd_protocol, sample_rate)
 
     @contextmanager
     def timeit(
