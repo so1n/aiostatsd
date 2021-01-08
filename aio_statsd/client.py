@@ -11,7 +11,6 @@ from random import random
 from typing import Iterator, NoReturn, Optional, Union
 
 from aio_statsd.connection import Connection
-from aio_statsd.pool import Pool
 from aio_statsd.protocol import StatsdProtocol
 from aio_statsd.protocol import DogStatsdProtocol
 from aio_statsd.transport_layer_protocol import ProtocolFlag
@@ -36,7 +35,6 @@ class Client:
         self._max_len = max_len
         self._queue: Optional[deque] = None
         self._listen_future: Optional[asyncio.Future] = None
-        self._join_future: Optional[asyncio.Future] = None
 
         self._is_listen: bool = False
         self._close_timeout: float = close_timeout
@@ -49,7 +47,7 @@ class Client:
             'create_timeout': create_timeout,
         }
 
-        self.connection: Union[Pool, Connection, None] = None
+        self.connection: Optional[Connection] = None
 
     async def __aenter__(self) -> "Client":
         await self.connect()
@@ -66,16 +64,6 @@ class Client:
         if not self.is_closed:
             raise ConnectionError(f'aiostatsd client already connected')
         self.connection = Connection(**self._conn_config_dict)
-        await self._connect()
-
-    async def create_pool(self, min_size: int = 1, max_size: int = 10):
-        if not self.is_closed:
-            raise ConnectionError(f'aiostatsd client already connected')
-        self.connection = Pool(
-            **self._conn_config_dict,
-            min_size=min_size,
-            max_size=max_size
-        )
         await self._connect()
 
     async def _connect(self):
