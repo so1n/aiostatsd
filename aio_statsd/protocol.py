@@ -47,7 +47,7 @@ class StatsdProtocol(object):
 
 class DogStatsdProtocol(object):
 
-    def __init_t_(self, prefix: Optional[str] = None):
+    def __init__(self, prefix: Optional[str] = None):
         if prefix:
             self._msg = f'{prefix}.'
         else:
