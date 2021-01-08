@@ -33,7 +33,7 @@ class Client:
     ) -> NoReturn:
         self._queue_empty = object()
         self._max_len = max_len
-        self._queue: Optional[deque] = None
+        self._deque: Optional[deque] = None
         self._listen_future: Optional[asyncio.Future] = None
 
         self._is_listen: bool = False
@@ -54,6 +54,12 @@ class Client:
         return self
 
     async def __aexit__(self, *args) -> NoReturn:
+        async def await_deque_empty():
+            while True:
+                if not self._deque:
+                    break
+                await asyncio.sleep(0.1)
+        await asyncio.wait_for(await_deque_empty(), 9)
         await self.close()
 
     @property
@@ -68,7 +74,7 @@ class Client:
 
     async def _connect(self):
         await self.connection.connect()
-        self._queue = deque(maxlen=self._max_len)
+        self._deque = deque(maxlen=self._max_len)
         self._is_listen = True
         self._listen_future = asyncio.ensure_future(self._listen())
         logging.info(f'create aiostatsd client{self}')
@@ -88,7 +94,7 @@ class Client:
 
     def _get_by_queue(self) -> Union[object, str]:
         try:
-            return self._queue.pop()
+            return self._deque.pop()
         except IndexError:
             return self._queue_empty
 
@@ -118,8 +124,8 @@ class Client:
             self.connection.sendto(msg)
         except Exception as e:
             logging.error(f'connection:{self.connection}')
-            if len(self._queue) < self._queue.maxlen * 0.9:
-                self._queue.append(msg)
+            if len(self._deque) < self._deque.maxlen * 0.9:
+                self._deque.append(msg)
                 await asyncio.sleep(1)
             else:
                 logging.error(f'send msd error:{e}, drop msg:{msg}')
@@ -127,7 +133,7 @@ class Client:
     def send(self, msg: str) -> NoReturn:
         try:
             # if queue full, auto del last value(queue[-1])
-            self._queue.appendleft(msg)
+            self._deque.appendleft(msg)
         except Exception as e:
             logging.error(f'aiostatsd put:{msg} to queue error:{e}')
 
@@ -301,8 +307,6 @@ class DogStatsdClient(Client):
             sample_rate = sample_rate or self._sample_rate
             if sample_rate != 1 and random() > sample_rate:
                 msg += f'|@{sample_rate}'
-            else:
-                continue
             self.send(msg)
 
     def gauge(
