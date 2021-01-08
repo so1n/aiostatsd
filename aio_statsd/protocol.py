@@ -11,8 +11,8 @@ class StatsdProtocol(object):
     https://github.com/statsd/statsd/blob/master/docs/metric_types.md
     """
     def __init__(self, prefix: Optional[str] = None, mtu_limit: int = 1432):
-        self.msg = f'{prefix}.' if prefix else ''
-        self._mtu_limit = mtu_limit
+        self.msg: str = f'{prefix}.' if prefix else ''
+        self._mtu_limit: int = mtu_limit
 
     def _msg_handle(self, msg: str) -> 'StatsdProtocol':
         if self.msg == '':

@@ -6,7 +6,7 @@ import asyncio
 import logging
 from enum import Enum
 
-from typing import Optional, Union
+from typing import Callable, List, Optional, Union
 
 __all__ = ['ProtocolFlag', 'TcpProtocol', 'DatagramProtocol']
 logger = logging.getLogger()
@@ -29,8 +29,8 @@ class _ProtocolMixin(asyncio.BaseProtocol):
         self._transport: Union[asyncio.Transport, asyncio.DatagramTransport, None] = None
         self._future: Optional[asyncio.Future] = None
 
-        self._before_event = []
-        self._after_event = []
+        self._before_event: List[Callable] = []
+        self._after_event: List[Callable] = []
 
         self._keep_alive_future: Optional[asyncio.Future] = None
         self._timeout = timeout
@@ -40,16 +40,16 @@ class _ProtocolMixin(asyncio.BaseProtocol):
             self._before_event.append(self.create_keep_alive)
             self._after_event.append(self.cancel_keep_alive)
 
-    def timeout_handle(self):
-        raise asyncio.TimeoutError(f'No response data received within {self._timeout} seconds')
-
     def cancel_keep_alive(self):
         if self._keep_alive_future:
             self._keep_alive_future.cancel()
             self._keep_alive_future = None
 
     def create_keep_alive(self):
-        self._keep_alive_future = self._loop.call_later(self._timeout, self.timeout_handle)
+        def timeout_handle():
+            raise asyncio.TimeoutError(f'No response data received within {self._timeout} seconds')
+
+        self._keep_alive_future = self._loop.call_later(self._timeout, timeout_handle)
 
     async def await_close(self) -> None:
         self.close()
@@ -62,6 +62,8 @@ class _ProtocolMixin(asyncio.BaseProtocol):
         if self._transport is None:
             return
 
+        if self._keep_alive_future and self._keep_alive_future.cancelled():
+            self._keep_alive_future.cancel()
         if not self._transport.is_closing():
             self._transport.close()
             self._transport = None
@@ -126,7 +128,10 @@ class TcpProtocol(asyncio.Protocol, _ProtocolMixin):
             self._drain_waiter = None
 
     def connection_lost(self, exc):
-        super().connection_lost(exc)
+        try:
+            super().connection_lost(exc)
+        except ConnectionError:
+            pass
         self._connection_lost = True
         # Wake up the writer if currently paused.
         if not self._paused:

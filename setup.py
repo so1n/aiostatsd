@@ -7,7 +7,7 @@ setuptools.setup(
     name="aio_statsd",
     version="0.2.1",
     author="so1n",
-    author_email="so1n897046026@example.com",
+    author_email="so1n897046026@gmail.com",
     description="Simple and fast statsd async client",
     long_description=long_description,
     long_description_content_type="text/markdown",
