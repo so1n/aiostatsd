@@ -1,9 +1,12 @@
 [tool.poetry]
 name = "aio_statsd"
-version = "0.2.2.1"
+version = "0.2.2"
 description = "Simple and fast statsd client"
 authors = ["So1n <qaz6803609@163.com>"]
 license = "MIT License"
+readme = "./README.md"
+repository = "https://github.com/so1n/aiostatsd"
+homepage = "https://github.com/so1n/aiostatsd"
 
 [tool.poetry.dependencies]
 python = "^3.6"
