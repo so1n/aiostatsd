@@ -1,14 +1,13 @@
 #!/usr/bin/env python3
 # -*- coding: utf-8 -*-
-__author__ = 'so1n'
-__date__ = '2020-07'
+__author__ = "so1n"
+__date__ = "2020-07"
 import asyncio
 import logging
 from enum import Enum
-
 from typing import Callable, List, Optional, Union
 
-__all__ = ['ProtocolFlag', 'TcpProtocol', 'DatagramProtocol']
+__all__ = ["ProtocolFlag", "TcpProtocol", "DatagramProtocol"]
 logger = logging.getLogger()
 
 
@@ -24,7 +23,6 @@ class ProtocolFlag(Enum):
 
 
 class _ProtocolMixin(asyncio.BaseProtocol):
-
     def __init__(self, timeout: int = 0) -> None:
         self._transport: Union[asyncio.Transport, asyncio.DatagramTransport, None] = None
         self._future: Optional[asyncio.Future] = None
@@ -47,7 +45,7 @@ class _ProtocolMixin(asyncio.BaseProtocol):
 
     def create_keep_alive(self):
         def timeout_handle():
-            raise asyncio.TimeoutError(f'No response data received within {self._timeout} seconds')
+            raise asyncio.TimeoutError(f"No response data received within {self._timeout} seconds")
 
         self._keep_alive_future = self._loop.call_later(self._timeout, timeout_handle)
 
@@ -87,18 +85,17 @@ class _ProtocolMixin(asyncio.BaseProtocol):
 
     def before_transport(self):
         if self._transport is None:
-            raise ConnectionError('connection is close')
+            raise ConnectionError("connection is close")
         for fn in self._before_event:
             fn()
 
     def after_transport(self, data, *args, **kwargs):
-        logger.debug(f'receive data:{data} args:{args}, kwargs:{kwargs}')
+        logger.debug(f"receive data:{data} args:{args}, kwargs:{kwargs}")
         for fn in self._after_event:
             fn()
 
 
 class TcpProtocol(asyncio.Protocol, _ProtocolMixin):
-
     def __init__(self, timeout: int = 0, loop=None):
         super().__init__(timeout)
         self._drain_waiter: Optional[asyncio.Future] = None
@@ -149,7 +146,7 @@ class TcpProtocol(asyncio.Protocol, _ProtocolMixin):
 
     async def drain(self):
         if self._connection_lost:
-            raise ConnectionResetError('Connection lost')
+            raise ConnectionResetError("Connection lost")
         if not self._paused:
             return
 
@@ -158,7 +155,7 @@ class TcpProtocol(asyncio.Protocol, _ProtocolMixin):
         await self._drain_waiter
 
     def eof_received(self):
-        logger.debug(f'{self} receive `EOF` flag')
+        logger.debug(f"{self} receive `EOF` flag")
         self.close()
 
     def send(self, data: bytes) -> None:
@@ -167,7 +164,6 @@ class TcpProtocol(asyncio.Protocol, _ProtocolMixin):
 
 
 class DatagramProtocol(asyncio.DatagramProtocol, _ProtocolMixin):
-
     def datagram_received(self, data: bytes, peer_name: str, *arg):
         self.after_transport(data, peer_name)
 

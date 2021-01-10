@@ -20,20 +20,7 @@ loop.run_until_complete(client.connect())
 client.gauge('test.key', 1)
 loop.run_forever()
 ```
-Create Connection Pool and use
-`max_size=5:` The maximum number of connections in the connection pool
-```Python
-import asyncio
-from aio_statsd import StatsdClient
-
-
-loop = asyncio.get_event_loop()
-client = StatsdClient()
-loop.run_until_complete(client.create_pool(max_size=5))
-client.gauge('test.key', 1)
-loop.run_forever()
-```
-Use context manager(Now, not support connection pool)
+Use context manager
 ```Python
 import asyncio
 from aio_statsd import StatsdClient
