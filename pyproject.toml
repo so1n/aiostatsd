@@ -1,6 +1,6 @@
 [tool.poetry]
-name = "aiostatsd"
-version = "0.2.2"
+name = "aio_statsd"
+version = "0.2.2.1"
 description = "Simple and fast statsd client"
 authors = ["So1n <qaz6803609@163.com>"]
 license = "MIT License"

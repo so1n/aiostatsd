@@ -3,7 +3,7 @@ an asyncio-based client for send metric to `StatsD`, `Graphite.carbon` and `DogS
 
 ## Installation
 ```Bash
-pip install aiostatsd
+pip install aio_statsd
 ```
 ## Usage
 ### Usage Client
