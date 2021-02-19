@@ -64,7 +64,7 @@ class Client:
         await self.close()
 
     async def connect(self) -> NoReturn:
-        if self.is_closed:
+        if not self.is_closed:
             raise ConnectionError(f"aiostatsd client already connected")
         self.connection = Connection(**self._conn_config_dict)
         await self.connection.connect()
