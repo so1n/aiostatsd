@@ -71,3 +71,36 @@ class DogStatsdProtocol(object):
 
     def distribution(self, key: str, value: int, tag_dict: Optional[dict] = None) -> "DogStatsdProtocol":
         return self.build_msg(key, -value, "d", tag_dict)
+
+
+class TelegrafStatsdProtocol(object):
+    def __init__(self, prefix: Optional[str] = None):
+        self._msg: str = f"{prefix}." if prefix else ""
+        self._cache: List[str] = []
+
+    def get_msg_list(self) -> List[str]:
+        return self._cache
+
+    def build_msg(self, key: str, value: int, type_: str, tag_dict: Optional[dict] = None) -> "TelegrafStatsdProtocol":
+        tag_str: str = "," + ",".join(f"{k}={v}" for k, v in tag_dict.items()) if tag_dict else ""
+        msg: str = self._msg + f"{key}{tag_str}:{value}|{type_}"
+        self._cache.append(msg)
+        return self
+
+    def gauge(self, key: str, value: int, tag_dict: Optional[dict] = None) -> "TelegrafStatsdProtocol":
+        return self.build_msg(key, value, "g", tag_dict)
+
+    def increment(self, key: str, value: int, tag_dict: Optional[dict] = None) -> "TelegrafStatsdProtocol":
+        return self.build_msg(key, value, "c", tag_dict)
+
+    def decrement(self, key: str, value: int, tag_dict: Optional[dict] = None) -> "TelegrafStatsdProtocol":
+        return self.build_msg(key, -value, "c", tag_dict)
+
+    def timer(self, key: str, value: int, tag_dict: Optional[dict] = None) -> "TelegrafStatsdProtocol":
+        return self.build_msg(key, -value, "ms", tag_dict)
+
+    def histogram(self, key: str, value: int, tag_dict: Optional[dict] = None) -> "TelegrafStatsdProtocol":
+        return self.build_msg(key, -value, "h", tag_dict)
+
+    def distribution(self, key: str, value: int, tag_dict: Optional[dict] = None) -> "TelegrafStatsdProtocol":
+        return self.build_msg(key, -value, "d", tag_dict)
