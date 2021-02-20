@@ -5,10 +5,10 @@ with open("README.md", "r") as fh:
 
 setuptools.setup(
     name="aio_statsd",
-    version="0.2.2",
+    version="0.2.3",
     author="so1n",
     author_email="so1n897046026@gmail.com",
-    description="Simple and fast statsd client",
+    description="an asyncio-based client for send metric to StatsD, Graphite.carbon and DogStatsD.",
     long_description=long_description,
     long_description_content_type="text/markdown",
     url="https://github.com/so1n/aiostatsd",
