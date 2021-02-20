@@ -326,3 +326,13 @@ class DogStatsdClient(Client):
     ) -> NoReturn:
         protocol: "DogStatsdProtocol" = DogStatsdProtocol().distribution(key, value, tag_dict)
         self.send_dog_statsd(protocol, sample_rate)
+
+    def set(
+        self,
+        key: str,
+        value: Union[int, float],
+        sample_rate: Union[int, float, None] = None,
+        tag_dict: Optional[dict] = None,
+    ) -> NoReturn:
+        protocol: "DogStatsdProtocol" = DogStatsdProtocol().set(key, value, tag_dict)
+        self.send_dog_statsd(protocol, sample_rate)
