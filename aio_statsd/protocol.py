@@ -12,10 +12,13 @@ class StatsdProtocol(object):
     """
 
     def __init__(self, prefix: Optional[str] = None, mtu_limit: int = 1432):
-        self.msg: str = f"{prefix}." if prefix else ""
+        self._prefix: str = prefix
+        self.msg: str = ""
         self._mtu_limit: int = mtu_limit
 
     def _msg_handle(self, msg: str) -> "StatsdProtocol":
+        if self._prefix:
+            msg = self._prefix + "." + msg
         if self.msg == "":
             self.msg = msg
         else:
@@ -42,7 +45,8 @@ class StatsdProtocol(object):
 
 class DogStatsdProtocol(object):
     def __init__(self, prefix: Optional[str] = None):
-        self._msg: str = f"{prefix}." if prefix else ""
+        self._prefix: str = prefix
+        self._msg: str = ""
         self._cache: List[str] = []
 
     def get_msg_list(self) -> List[str]:
@@ -51,6 +55,8 @@ class DogStatsdProtocol(object):
     def build_msg(self, key: str, value: int, type_: str, tag_dict: Optional[dict] = None) -> "DogStatsdProtocol":
         tag_str: str = "|#" + ",".join(f"{k}:{v}" for k, v in tag_dict.items()) if tag_dict else ""
         msg: str = self._msg + f"{key}:{value}|{type_}" + tag_str
+        if self._prefix:
+            msg = self._prefix + "." + msg
         self._cache.append(msg)
         return self
 
@@ -71,3 +77,6 @@ class DogStatsdProtocol(object):
 
     def distribution(self, key: str, value: int, tag_dict: Optional[dict] = None) -> "DogStatsdProtocol":
         return self.build_msg(key, value, "d", tag_dict)
+
+    def set(self, key: str, value: int, tag_dict: Optional[dict] = None) -> "DogStatsdProtocol":
+        return self.build_msg(key, value, "s", tag_dict)
