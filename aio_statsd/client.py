@@ -74,26 +74,26 @@ class Client:
         logging.info(f"create aiostatsd client{self}")
 
     async def close(self) -> NoReturn:
-        self.is_closed = False
+        self.is_closed = True
         await self._listen_future
         self._listen_future = None
 
     async def _close(self):
-        if not self.is_closed:
+        self.is_closed = True
 
-            async def before_close():
-                while True:
-                    value: Union[object, str] = self._get_by_queue()
-                    if value is not self._queue_empty:
-                        await self._real_send(value)
-                    else:
-                        break
+        async def before_close():
+            while True:
+                value: Union[object, str] = self._get_by_queue()
+                if value is not self._queue_empty:
+                    await self._real_send(value)
+                else:
+                    break
 
-            try:
-                await asyncio.wait_for(before_close(), timeout=self._close_timeout)
-            except asyncio.TimeoutError:
-                pass
-            await self.connection.await_close()
+        try:
+            await asyncio.wait_for(before_close(), timeout=self._close_timeout)
+        except asyncio.TimeoutError:
+            pass
+        await self.connection.await_close()
 
     def _get_by_queue(self) -> Union[object, str]:
         try:
@@ -193,12 +193,15 @@ class StatsdClient(Client):
         sample_rate: Union[float, int] = sample_rate or self._sample_rate
         if "\n" in msg and sample_rate:
             logging.warning("Multi-Metric not support sample rate")
-        else:
-            if random() > sample_rate:
-                msg += f"|@{sample_rate}"
-            elif sample_rate > 1:
-                logging.warning("sample rate must > 0 & < 1")
-                return
+
+        if sample_rate > 1:
+            logging.warning("sample rate must > 0 & < 1")
+            return
+
+        if sample_rate != 1 and random() > sample_rate:
+            msg += f"|@{sample_rate}"
+        elif sample_rate != 1:
+            return
         self.send(msg)
 
     def counter(self, key: str, value: int, sample_rate: Union[int, float, None] = None) -> NoReturn:
