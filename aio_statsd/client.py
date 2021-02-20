@@ -208,10 +208,7 @@ class StatsdClient(Client):
         statsd_protocol: "StatsdProtocol" = StatsdProtocol().counter(key, value)
         self.send_statsd(statsd_protocol, sample_rate)
 
-    def timer(self, key: str, value: Union[int, float], sample_rate: Union[int, float, None] = None) -> NoReturn:
-        if len(str(value)) == 10:
-            value = value * 1000
-        value: int = int(value)
+    def timer(self, key: str, value: int, sample_rate: Union[int, float, None] = None) -> NoReturn:
         statsd_protocol: "StatsdProtocol" = StatsdProtocol().timer(key, value)
         self.send_statsd(statsd_protocol, sample_rate)
 
@@ -232,7 +229,7 @@ class StatsdClient(Client):
         started_at: float = _loop.time()
         yield
         value: float = _loop.time() - started_at
-        self.timer(key, value, sample_rate)
+        self.timer(key, int(value * 1000), sample_rate)
 
 
 class DogStatsdClient(Client):
@@ -267,6 +264,8 @@ class DogStatsdClient(Client):
             sample_rate: Union[int, float] = sample_rate or self._sample_rate
             if sample_rate != 1 and random() > sample_rate:
                 msg += f"|@{sample_rate}"
+            elif sample_rate != 1:
+                return
             self.send(msg)
 
     def gauge(
@@ -284,7 +283,7 @@ class DogStatsdClient(Client):
     def decrement(
         self, key: str, value: int, sample_rate: Union[int, float, None] = None, tag_dict: Optional[dict] = None
     ) -> NoReturn:
-        protocol: "DogStatsdProtocol" = DogStatsdProtocol().increment(key, value, tag_dict)
+        protocol: "DogStatsdProtocol" = DogStatsdProtocol().decrement(key, value, tag_dict)
         self.send_dog_statsd(protocol, sample_rate)
 
     def timer(
@@ -306,7 +305,7 @@ class DogStatsdClient(Client):
         started_at: float = _loop.time()
         yield
         value: float = _loop.time() - started_at
-        self.timer(key, value, sample_rate)
+        self.timer(key, int(value * 1000), sample_rate)
 
     def histogram(
         self,

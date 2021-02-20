@@ -21,7 +21,7 @@ class StatsdProtocol(object):
         else:
             self.msg += "\n" + msg
         if len(self.msg) > self._mtu_limit:
-            logging.warning(
+            raise RuntimeError(
                 f"msg:{msg} length:{len(self.msg)} > mtu max length limit:{self._mtu_limit}"
                 f"learn more:https://github.com/statsd/statsd/blob/master/docs/metric_types.md"
             )
@@ -64,10 +64,10 @@ class DogStatsdProtocol(object):
         return self.build_msg(key, -value, "c", tag_dict)
 
     def timer(self, key: str, value: int, tag_dict: Optional[dict] = None) -> "DogStatsdProtocol":
-        return self.build_msg(key, -value, "ms", tag_dict)
+        return self.build_msg(key, value, "ms", tag_dict)
 
     def histogram(self, key: str, value: int, tag_dict: Optional[dict] = None) -> "DogStatsdProtocol":
-        return self.build_msg(key, -value, "h", tag_dict)
+        return self.build_msg(key, value, "h", tag_dict)
 
     def distribution(self, key: str, value: int, tag_dict: Optional[dict] = None) -> "DogStatsdProtocol":
-        return self.build_msg(key, -value, "d", tag_dict)
+        return self.build_msg(key, value, "d", tag_dict)
