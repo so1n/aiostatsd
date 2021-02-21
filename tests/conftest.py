@@ -22,3 +22,24 @@ async def udp_server():
     yield result_queue
 
     transport.close()
+
+
+@pytest.fixture
+async def tcp_server():
+    result_queue: asyncio.Queue = asyncio.Queue()
+
+    class ServerProtocol(asyncio.Protocol):
+        def data_received(self, data):
+            result_queue.put_nowait(data)
+
+    loop: asyncio.AbstractEventLoop = asyncio.get_event_loop()
+
+    server = await loop.create_server(
+        lambda: ServerProtocol(), '127.0.0.1', 9999
+    )
+
+    yield result_queue
+
+    server.close()
+    await server.wait_closed()
+

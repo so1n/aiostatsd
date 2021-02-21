@@ -47,11 +47,6 @@ class TestStatsdClient:
         statsd_client.send_statsd(metric)
         assert await udp_server.get() == b'so1n_test.test2.key:1|g\nso1n_test.test2.key:1|s'
 
-    async def test_client_context_manager(self, udp_server):
-        async with aio_statsd.StatsdClient(port=9999) as client:
-            client.counter('test.key', 1)
-            assert await udp_server.get() == b'test.key:1|c'
-
     async def test_mutli_msg(self, statsd_client: aio_statsd.StatsdClient, udp_server):
         metric = aio_statsd.StatsdProtocol()
         metric.gauge('test2.key', 1)

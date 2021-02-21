@@ -63,11 +63,6 @@ class TestStatsdClient:
 
         assert await udp_server.get() == b'test.key:1000|ms'
 
-    async def test_client_context_manager(self, udp_server):
-        async with aio_statsd.DogStatsdClient(port=9999) as client:
-            client.increment('test.key', 1)
-            assert await udp_server.get() == b'test.key:1|c'
-
     async def test_mutli_msg(self, dog_statsd_client: aio_statsd.DogStatsdClient, udp_server):
         metric = aio_statsd.DogStatsdProtocol()
         metric.gauge('test2.key', 1)
