@@ -1,8 +1,8 @@
 import time
 
-import aio_statsd
 import pytest
 
+import aio_statsd
 
 pytestmark = pytest.mark.asyncio
 
@@ -20,5 +20,5 @@ class TestGraphiteClient:
         now_timestamp: int = int(time.time())
         interval: int = 10
         timestamp: int = int(now_timestamp) // interval * interval
-        graphite_client.send_graphite('test.key', 1, timestamp=timestamp, interval=interval)
-        assert await udp_server.get() == str.encode(f'test.key 1 {timestamp}')
+        graphite_client.send_graphite("test.key", 1, timestamp=timestamp, interval=interval)
+        assert await udp_server.get() == str.encode(f"test.key 1 {timestamp}")
