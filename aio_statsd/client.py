@@ -11,7 +11,7 @@ from random import random
 from typing import Any, Dict, Iterator, NoReturn, Optional, Union
 
 from aio_statsd.connection import Connection
-from aio_statsd.protocol import DogStatsdProtocol, StatsdProtocol
+from aio_statsd.protocol import DogStatsdProtocol, StatsdProtocol, TelegrafStatsdProtocol
 from aio_statsd.transport_layer_protocol import ProtocolFlag
 from aio_statsd.utlis import get_event_loop
 
@@ -326,7 +326,7 @@ class DogStatsdClient(Client):
     ) -> NoReturn:
         protocol: "DogStatsdProtocol" = DogStatsdProtocol().distribution(key, value, tag_dict)
         self.send_dog_statsd(protocol, sample_rate)
-
+        
     def set(
         self,
         key: str,
@@ -336,3 +336,97 @@ class DogStatsdClient(Client):
     ) -> NoReturn:
         protocol: "DogStatsdProtocol" = DogStatsdProtocol().set(key, value, tag_dict)
         self.send_dog_statsd(protocol, sample_rate)
+        
+
+class TelegrafStatsdClient(Client):
+    def __init__(
+        self,
+        host: str = "localhost",
+        port: int = 8125,
+        protocol: ProtocolFlag = ProtocolFlag.udp,
+        sample_rate: Union[float, int] = 1,
+        timeout: int = 0,
+        debug: bool = False,
+        close_timeout: int = 5,
+        create_timeout: int = 5,
+        max_len: int = 10000,
+    ) -> NoReturn:
+        super().__init__(
+            host=host,
+            port=port,
+            protocol=protocol,
+            timeout=timeout,
+            debug=debug,
+            close_timeout=close_timeout,
+            create_timeout=create_timeout,
+            max_len=max_len,
+        )
+        self._sample_rate = sample_rate
+
+    def send_telegraf_statsd(
+        self, telegraf_statsd_protocol: "TelegrafStatsdProtocol", sample_rate: Union[int, float, None] = None
+    ) -> NoReturn:
+        for msg in telegraf_statsd_protocol.get_msg_list():
+            sample_rate: Union[int, float] = sample_rate or self._sample_rate
+            if sample_rate != 1 and random() > sample_rate:
+                msg += f"|@{sample_rate}"
+            self.send(msg)
+
+    def gauge(
+        self, key: str, value: int, sample_rate: Union[int, float, None] = None, tag_dict: Optional[dict] = None
+    ) -> NoReturn:
+        protocol: "TelegrafStatsdProtocol" = TelegrafStatsdProtocol().gauge(key, value, tag_dict)
+        self.send_telegraf_statsd(protocol, sample_rate)
+
+    def increment(
+        self, key: str, value: int, sample_rate: Union[int, float, None] = None, tag_dict: Optional[dict] = None
+    ) -> NoReturn:
+        protocol: "TelegrafStatsdProtocol" = TelegrafStatsdProtocol().increment(key, value, tag_dict)
+        self.send_telegraf_statsd(protocol, sample_rate)
+
+    def decrement(
+        self, key: str, value: int, sample_rate: Union[int, float, None] = None, tag_dict: Optional[dict] = None
+    ) -> NoReturn:
+        protocol: "TelegrafStatsdProtocol" = TelegrafStatsdProtocol().increment(key, value, tag_dict)
+        self.send_telegraf_statsd(protocol, sample_rate)
+
+    def timer(
+        self,
+        key: str,
+        value: Union[int, float],
+        sample_rate: Union[int, float, None] = None,
+        tag_dict: Optional[dict] = None,
+    ) -> NoReturn:
+        protocol: "TelegrafStatsdProtocol" = TelegrafStatsdProtocol().timer(key, value, tag_dict)
+        self.send_telegraf_statsd(protocol, sample_rate)
+
+    @contextmanager
+    def timeit(self, key: str, sample_rate: Union[int, float, None] = None) -> Iterator[None]:
+        """
+        Context manager for easily timing methods.
+        """
+        _loop: "asyncio.AbstractEventLoop" = get_event_loop()
+        started_at: float = _loop.time()
+        yield
+        value: float = _loop.time() - started_at
+        self.timer(key, value, sample_rate)
+
+    def histogram(
+        self,
+        key: str,
+        value: Union[int, float],
+        sample_rate: Union[int, float, None] = None,
+        tag_dict: Optional[dict] = None,
+    ) -> NoReturn:
+        protocol: "TelegrafStatsdProtocol" = TelegrafStatsdProtocol().histogram(key, value, tag_dict)
+        self.send_telegraf_statsd(protocol, sample_rate)
+
+    def distribution(
+        self,
+        key: str,
+        value: Union[int, float],
+        sample_rate: Union[int, float, None] = None,
+        tag_dict: Optional[dict] = None,
+    ) -> NoReturn:
+        protocol: "TelegrafStatsdProtocol" = TelegrafStatsdProtocol().distribution(key, value, tag_dict)
+        self.send_telegraf_statsd(protocol, sample_rate)
