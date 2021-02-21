@@ -3,7 +3,7 @@
 __author__ = "so1n"
 __date__ = "2020-02"
 import logging
-from typing import List, Optional
+from typing import List, Optional, Union
 
 
 class StatsdProtocol(object):
@@ -39,11 +39,19 @@ class StatsdProtocol(object):
     def gauge(self, key: str, value: int) -> "StatsdProtocol":
         return self._msg_handle(f"{key}:{value}|g")
 
+    def increment(self, key: str, value: int) -> "StatsdProtocol":
+        return self._msg_handle(f"{key}:+{value}|g")
+
+    def decrement(self, key: str, value: int) -> "StatsdProtocol":
+        return self._msg_handle(f"{key}:-{value}|g")
+
     def sets(self, key: str, value: int) -> "StatsdProtocol":
         return self._msg_handle(f"{key}:{value}|s")
 
 
 class DogStatsdProtocol(object):
+    """https://docs.datadoghq.com/developers/metrics/types/"""
+
     def __init__(self, prefix: Optional[str] = None):
         self._prefix: str = prefix
         self._msg: str = ""
@@ -83,33 +91,46 @@ class DogStatsdProtocol(object):
 
 
 class TelegrafStatsdProtocol(object):
+    """https://github.com/influxdata/telegraf/tree/master/plugins/inputs/statsd"""
+
     def __init__(self, prefix: Optional[str] = None):
-        self._msg: str = f"{prefix}." if prefix else ""
+        self._prefix: str = prefix
+        self._msg: str = ""
         self._cache: List[str] = []
 
     def get_msg_list(self) -> List[str]:
         return self._cache
 
-    def build_msg(self, key: str, value: int, type_: str, tag_dict: Optional[dict] = None) -> "TelegrafStatsdProtocol":
+    def build_msg(
+        self, key: str, value: Union[int, str], type_: str, tag_dict: Optional[dict] = None
+    ) -> "TelegrafStatsdProtocol":
         tag_str: str = "," + ",".join(f"{k}={v}" for k, v in tag_dict.items()) if tag_dict else ""
         msg: str = self._msg + f"{key}{tag_str}:{value}|{type_}"
+        if self._prefix:
+            msg = self._prefix + "." + msg
         self._cache.append(msg)
         return self
+
+    def counter(self, key: str, value: int, tag_dict: Optional[dict] = None) -> "TelegrafStatsdProtocol":
+        return self.build_msg(key, value, "c", tag_dict)
 
     def gauge(self, key: str, value: int, tag_dict: Optional[dict] = None) -> "TelegrafStatsdProtocol":
         return self.build_msg(key, value, "g", tag_dict)
 
     def increment(self, key: str, value: int, tag_dict: Optional[dict] = None) -> "TelegrafStatsdProtocol":
-        return self.build_msg(key, value, "c", tag_dict)
+        return self.build_msg(key, "+" + str(value), "g", tag_dict)
 
     def decrement(self, key: str, value: int, tag_dict: Optional[dict] = None) -> "TelegrafStatsdProtocol":
-        return self.build_msg(key, -value, "c", tag_dict)
+        return self.build_msg(key, -value, "g", tag_dict)
 
     def timer(self, key: str, value: int, tag_dict: Optional[dict] = None) -> "TelegrafStatsdProtocol":
-        return self.build_msg(key, -value, "ms", tag_dict)
+        return self.build_msg(key, value, "ms", tag_dict)
 
     def histogram(self, key: str, value: int, tag_dict: Optional[dict] = None) -> "TelegrafStatsdProtocol":
-        return self.build_msg(key, -value, "h", tag_dict)
+        return self.build_msg(key, value, "h", tag_dict)
 
     def distribution(self, key: str, value: int, tag_dict: Optional[dict] = None) -> "TelegrafStatsdProtocol":
-        return self.build_msg(key, -value, "d", tag_dict)
+        return self.build_msg(key, value, "d", tag_dict)
+
+    def set(self, key: str, value: int, tag_dict: Optional[dict] = None) -> "TelegrafStatsdProtocol":
+        return self.build_msg(key, value, "s", tag_dict)

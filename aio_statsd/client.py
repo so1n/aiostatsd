@@ -326,7 +326,7 @@ class DogStatsdClient(Client):
     ) -> NoReturn:
         protocol: "DogStatsdProtocol" = DogStatsdProtocol().distribution(key, value, tag_dict)
         self.send_dog_statsd(protocol, sample_rate)
-        
+
     def set(
         self,
         key: str,
@@ -336,7 +336,7 @@ class DogStatsdClient(Client):
     ) -> NoReturn:
         protocol: "DogStatsdProtocol" = DogStatsdProtocol().set(key, value, tag_dict)
         self.send_dog_statsd(protocol, sample_rate)
-        
+
 
 class TelegrafStatsdClient(Client):
     def __init__(
@@ -370,6 +370,8 @@ class TelegrafStatsdClient(Client):
             sample_rate: Union[int, float] = sample_rate or self._sample_rate
             if sample_rate != 1 and random() > sample_rate:
                 msg += f"|@{sample_rate}"
+            elif sample_rate != 1:
+                return
             self.send(msg)
 
     def gauge(
@@ -387,7 +389,7 @@ class TelegrafStatsdClient(Client):
     def decrement(
         self, key: str, value: int, sample_rate: Union[int, float, None] = None, tag_dict: Optional[dict] = None
     ) -> NoReturn:
-        protocol: "TelegrafStatsdProtocol" = TelegrafStatsdProtocol().increment(key, value, tag_dict)
+        protocol: "TelegrafStatsdProtocol" = TelegrafStatsdProtocol().decrement(key, value, tag_dict)
         self.send_telegraf_statsd(protocol, sample_rate)
 
     def timer(
@@ -409,7 +411,7 @@ class TelegrafStatsdClient(Client):
         started_at: float = _loop.time()
         yield
         value: float = _loop.time() - started_at
-        self.timer(key, value, sample_rate)
+        self.timer(key, int(value * 1000), sample_rate)
 
     def histogram(
         self,
@@ -429,4 +431,24 @@ class TelegrafStatsdClient(Client):
         tag_dict: Optional[dict] = None,
     ) -> NoReturn:
         protocol: "TelegrafStatsdProtocol" = TelegrafStatsdProtocol().distribution(key, value, tag_dict)
+        self.send_telegraf_statsd(protocol, sample_rate)
+
+    def set(
+        self,
+        key: str,
+        value: Union[int, float],
+        sample_rate: Union[int, float, None] = None,
+        tag_dict: Optional[dict] = None,
+    ) -> NoReturn:
+        protocol: "TelegrafStatsdProtocol" = TelegrafStatsdProtocol().set(key, value, tag_dict)
+        self.send_telegraf_statsd(protocol, sample_rate)
+
+    def counter(
+        self,
+        key: str,
+        value: Union[int, float],
+        sample_rate: Union[int, float, None] = None,
+        tag_dict: Optional[dict] = None,
+    ) -> NoReturn:
+        protocol: "TelegrafStatsdProtocol" = TelegrafStatsdProtocol().counter(key, value, tag_dict)
         self.send_telegraf_statsd(protocol, sample_rate)
