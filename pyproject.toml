@@ -1,7 +1,7 @@
 [tool.poetry]
 name = "aio_statsd"
-version = "0.2.3"
-description = "an asyncio-based client for send metric to StatsD, Graphite.carbon and DogStatsD."
+version = "0.2.4"
+description = "an asyncio-based client for send metric to StatsD, Graphite.carbon, TelegrafStatsD and DogStatsD."
 authors = ["So1n <qaz6803609@163.com>"]
 license = "MIT License"
 readme = "./README.md"

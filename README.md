@@ -1,5 +1,5 @@
 ## aiostasd
-an asyncio-based client for send metric to `StatsD`, `Graphite.carbon` and `DogStatsD`.
+an asyncio-based client for send metric to `StatsD`, `Graphite.carbon`, `TelegrafStatsD` and `DogStatsD`.
 
 ## Installation
 ```Bash
@@ -11,8 +11,8 @@ Create connection and send gauge metric.
 aiostatsd client will automatically send messages in the background when the loop is running
 ```Python
 import asyncio
-from aio_statsd import StatsdClient
 
+from aio_statsd import StatsdClient
 
 loop = asyncio.get_event_loop()
 client = StatsdClient()
@@ -23,6 +23,7 @@ loop.run_forever()
 Use context manager
 ```Python
 import asyncio
+
 from aio_statsd import StatsdClient
 
 
@@ -46,6 +47,7 @@ loop.run_until_complete(main())
 ### send metric
 ```Python
 import asyncio
+
 from aio_statsd import StatsdClient
 
 
@@ -75,8 +77,8 @@ loop.run_until_complete(main())
 #### Graphite(carbon)
 ```python
 import asyncio
-from aio_statsd import GraphiteClient
 
+from aio_statsd import GraphiteClient
 
 loop = asyncio.get_event_loop()
 client = GraphiteClient()
@@ -88,6 +90,7 @@ loop.run_forever()
 >Note: Not tested in production
 ```python
 import asyncio
+
 from aio_statsd import DogStatsdClient
 
 
@@ -113,6 +116,40 @@ async def main():
         metric.gauge('test2.key', 1, tag_dict={'tag': 'tag1'})
         metric.histogram('test2.key', 1)
         client.send_dog_statsd(metric, sample_rate=0.5)
+
+loop = asyncio.get_event_loop()
+loop.run_until_complete(main())
+```
+#### DogStatsD
+>Note: Not tested in production
+```python
+import asyncio
+
+from aio_statsd import TelegrafStatsdClient 
+
+
+async def main():
+    async with TelegrafStatsdClient() as client:
+        client.gauge('test.key', 1)
+        client.distribution('test.key', 1)
+        client.increment('test.key',1)
+        client.histogram('test.key', 1)
+        client.timer('test.key', 1)
+        with client.timeit('test'):
+            pass  # run your code
+        
+        # all metric support sample rate and TelegrafStatsd tag
+        client.gauge('test1.key', 1, sample_rate=0.5, tag_dict={'tag': 'tag1'})
+        
+        # mutli metric support(
+        #   TelegrafStatsdProtocol will store the message in its own queue and
+        #   TelegrafStatsDClient traverses to read TelegrafStatsdProtocol's message and send it
+        # )
+        from aio_statsd import TelegrafStatsdProtocol 
+        metric = TelegrafStatsdProtocol()   
+        metric.gauge('test2.key', 1, tag_dict={'tag': 'tag1'})
+        metric.histogram('test2.key', 1)
+        client.send_telegraf_statsd(metric, sample_rate=0.5)
 
 loop = asyncio.get_event_loop()
 loop.run_until_complete(main())
