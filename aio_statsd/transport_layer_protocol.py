@@ -96,6 +96,8 @@ class _ProtocolMixin(asyncio.BaseProtocol):
 
 
 class TcpProtocol(asyncio.Protocol, _ProtocolMixin):
+    _transport: asyncio.Transport
+
     def __init__(self, timeout: int = 0, loop=None):
         super().__init__(timeout)
         self._drain_waiter: Optional[asyncio.Future] = None
@@ -160,11 +162,14 @@ class TcpProtocol(asyncio.Protocol, _ProtocolMixin):
 
     def send(self, data: bytes) -> None:
         self.before_transport()
-        self._transport.write(data)
+        if self._transport:
+            self._transport.write(data)
 
 
 class DatagramProtocol(asyncio.DatagramProtocol, _ProtocolMixin):
-    def datagram_received(self, data: bytes, peer_name: str, *arg):
+    _transport: asyncio.DatagramTransport
+
+    def datagram_received(self, data, peer_name):
         self.after_transport(data, peer_name)
 
     def error_received(self, exc):
@@ -173,4 +178,5 @@ class DatagramProtocol(asyncio.DatagramProtocol, _ProtocolMixin):
 
     def send(self, data: bytes) -> None:
         self.before_transport()
-        self._transport.sendto(data)
+        if self._transport:
+            self._transport.sendto(data)

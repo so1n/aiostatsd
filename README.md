@@ -125,7 +125,7 @@ loop.run_until_complete(main())
 ```python
 import asyncio
 
-from aio_statsd import TelegrafStatsdClient 
+from aio_statsd import TelegrafStatsdClient
 
 
 async def main():

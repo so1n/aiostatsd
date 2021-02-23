@@ -1,7 +1,9 @@
 import asyncio
 import sys
+from typing import Union
 
-__all__ = ["get_event_loop"]
+__all__ = ["get_event_loop", "NUM_TYPE"]
+NUM_TYPE = Union[float, int]
 
 
 def get_event_loop() -> asyncio.AbstractEventLoop:

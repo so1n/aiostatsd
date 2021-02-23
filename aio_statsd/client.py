@@ -8,12 +8,12 @@ import time
 from collections import deque
 from contextlib import contextmanager
 from random import random
-from typing import Any, Dict, Iterator, NoReturn, Optional, Union
+from typing import Any, Deque, Dict, Iterator, Optional, Union
 
 from aio_statsd.connection import Connection
 from aio_statsd.protocol import DogStatsdProtocol, StatsdProtocol, TelegrafStatsdProtocol
 from aio_statsd.transport_layer_protocol import ProtocolFlag
-from aio_statsd.utlis import get_event_loop
+from aio_statsd.utlis import NUM_TYPE, get_event_loop
 
 
 class Client:
@@ -27,10 +27,10 @@ class Client:
         close_timeout: int = 5,
         create_timeout: int = 5,
         max_len: int = 1000,
-    ) -> NoReturn:
-        self._queue_empty: "object()" = object()
+    ):
+        self._queue_empty: "object" = object()
         self._max_len: int = max_len
-        self._deque: Optional[deque] = None
+        self._deque: Deque[str] = deque(maxlen=self._max_len)
         self._listen_future: Optional[asyncio.Future] = None
 
         self.is_closed: bool = True
@@ -44,13 +44,13 @@ class Client:
             "create_timeout": create_timeout,
         }
 
-        self.connection: Optional[Connection] = None
+        self.connection: Connection = Connection(**self._conn_config_dict)
 
     async def __aenter__(self) -> "Client":
         await self.connect()
         return self
 
-    async def __aexit__(self, *args) -> NoReturn:
+    async def __aexit__(self, *args) -> None:
         async def await_deque_empty():
             while True:
                 if not self._deque:
@@ -63,28 +63,28 @@ class Client:
             pass
         await self.close()
 
-    async def connect(self) -> NoReturn:
+    async def connect(self) -> None:
         if not self.is_closed:
             raise ConnectionError(f"aiostatsd client already connected")
-        self.connection = Connection(**self._conn_config_dict)
         await self.connection.connect()
         self._deque = deque(maxlen=self._max_len)
         self.is_closed = False
         self._listen_future = asyncio.ensure_future(self._listen())
         logging.info(f"create aiostatsd client{self}")
 
-    async def close(self) -> NoReturn:
+    async def close(self) -> None:
         self.is_closed = True
-        await self._listen_future
-        self._listen_future = None
+        if self._listen_future:
+            await self._listen_future
+            self._listen_future = None
 
     async def _close(self):
         self.is_closed = True
 
         async def before_close():
             while True:
-                value: Union[object, str] = self._get_by_queue()
-                if value is not self._queue_empty:
+                value: Optional[str] = self._get_by_queue()
+                if value:
                     await self._real_send(value)
                 else:
                     break
@@ -95,17 +95,19 @@ class Client:
             pass
         await self.connection.await_close()
 
-    def _get_by_queue(self) -> Union[object, str]:
+    def _get_by_queue(self) -> Optional[str]:
         try:
-            return self._deque.pop()
+            if self._deque:
+                return self._deque.pop()
+            return None
         except IndexError:
-            return self._queue_empty
+            return None
 
-    async def _listen(self) -> NoReturn:
+    async def _listen(self) -> None:
         try:
             while not self.is_closed:
-                value: Union[object, str] = self._get_by_queue()
-                if value is not self._queue_empty:
+                value: Optional[str] = self._get_by_queue()
+                if value:
                     await self._real_send(value)
                 else:
                     await asyncio.sleep(0.01)
@@ -114,18 +116,18 @@ class Client:
         finally:
             await self._close()
 
-    async def _real_send(self, msg: str) -> NoReturn:
+    async def _real_send(self, msg: str) -> None:
         try:
             self.connection.sendto(msg)
         except Exception as e:
             logging.error(f"connection:{self.connection}")
-            if len(self._deque) < self._deque.maxlen * 0.9:
+            if len(self._deque) < (self._deque.maxlen or 0) * 0.9:
                 self._deque.append(msg)
                 await asyncio.sleep(1)
             else:
                 logging.error(f"send msd error:{e}, drop msg:{msg}")
 
-    def send(self, msg: str) -> NoReturn:
+    def send(self, msg: str) -> None:
         try:
             # if queue full, auto del last value(queue[-1])
             self._deque.appendleft(msg)
@@ -144,7 +146,7 @@ class GraphiteClient(Client):
         close_timeout: int = 5,
         create_timeout: int = 5,
         max_len: int = 10000,
-    ) -> NoReturn:
+    ) -> None:
         super().__init__(
             host=host,
             port=port,
@@ -156,9 +158,9 @@ class GraphiteClient(Client):
             max_len=max_len,
         )
 
-    def send_graphite(self, key: str, value: int = 0, timestamp: int = time.time(), interval: int = 10) -> NoReturn:
+    def send_graphite(self, key: str, value: int = 0, timestamp: int = int(time.time()), interval: int = 10) -> None:
         """interval: Multiple clients timestamp interval synchronization"""
-        timestamp: int = int(timestamp) // interval * interval
+        timestamp = int(timestamp) // interval * interval
         msg: str = "{} {} {}".format(key, value, timestamp)
         self.send(msg)
 
@@ -175,7 +177,7 @@ class StatsdClient(Client):
         close_timeout: int = 5,
         create_timeout: int = 5,
         max_len: int = 10000,
-    ) -> NoReturn:
+    ) -> None:
         super().__init__(
             host=host,
             port=port,
@@ -188,9 +190,9 @@ class StatsdClient(Client):
         )
         self._sample_rate: Union[float, int] = sample_rate
 
-    def send_statsd(self, statsd_protocol: "StatsdProtocol", sample_rate: Union[int, float, None] = None) -> NoReturn:
+    def send_statsd(self, statsd_protocol: "StatsdProtocol", sample_rate: Union[int, float, None] = None) -> None:
         msg: str = statsd_protocol.msg
-        sample_rate: Union[float, int] = sample_rate or self._sample_rate
+        sample_rate = sample_rate or self._sample_rate
         if "\n" in msg and sample_rate:
             logging.warning("Multi-Metric not support sample rate")
 
@@ -204,19 +206,19 @@ class StatsdClient(Client):
             return
         self.send(msg)
 
-    def counter(self, key: str, value: int, sample_rate: Union[int, float, None] = None) -> NoReturn:
+    def counter(self, key: str, value: int, sample_rate: Union[int, float, None] = None) -> None:
         statsd_protocol: "StatsdProtocol" = StatsdProtocol().counter(key, value)
         self.send_statsd(statsd_protocol, sample_rate)
 
-    def timer(self, key: str, value: int, sample_rate: Union[int, float, None] = None) -> NoReturn:
+    def timer(self, key: str, value: int, sample_rate: Union[int, float, None] = None) -> None:
         statsd_protocol: "StatsdProtocol" = StatsdProtocol().timer(key, value)
         self.send_statsd(statsd_protocol, sample_rate)
 
-    def gauge(self, key: str, value: int, sample_rate: Union[int, float, None] = None) -> NoReturn:
+    def gauge(self, key: str, value: int, sample_rate: Union[int, float, None] = None) -> None:
         statsd_protocol: "StatsdProtocol" = StatsdProtocol().gauge(key, value)
         self.send_statsd(statsd_protocol, sample_rate)
 
-    def sets(self, key: str, value: int, sample_rate: Union[int, float, None] = None) -> NoReturn:
+    def sets(self, key: str, value: int, sample_rate: Union[int, float, None] = None) -> None:
         statsd_protocol: "StatsdProtocol" = StatsdProtocol().sets(key, value)
         self.send_statsd(statsd_protocol, sample_rate)
 
@@ -244,7 +246,7 @@ class DogStatsdClient(Client):
         close_timeout: int = 5,
         create_timeout: int = 5,
         max_len: int = 10000,
-    ) -> NoReturn:
+    ) -> None:
         super().__init__(
             host=host,
             port=port,
@@ -259,9 +261,9 @@ class DogStatsdClient(Client):
 
     def send_dog_statsd(
         self, dog_statsd_protocol: "DogStatsdProtocol", sample_rate: Union[int, float, None] = None
-    ) -> NoReturn:
+    ) -> None:
         for msg in dog_statsd_protocol.get_msg_list():
-            sample_rate: Union[int, float] = sample_rate or self._sample_rate
+            sample_rate = sample_rate or self._sample_rate
             if sample_rate != 1 and random() > sample_rate:
                 msg += f"|@{sample_rate}"
             elif sample_rate != 1:
@@ -270,29 +272,29 @@ class DogStatsdClient(Client):
 
     def gauge(
         self, key: str, value: int, sample_rate: Union[int, float, None] = None, tag_dict: Optional[dict] = None
-    ) -> NoReturn:
+    ) -> None:
         protocol: "DogStatsdProtocol" = DogStatsdProtocol().gauge(key, value, tag_dict)
         self.send_dog_statsd(protocol, sample_rate)
 
     def increment(
         self, key: str, value: int, sample_rate: Union[int, float, None] = None, tag_dict: Optional[dict] = None
-    ) -> NoReturn:
+    ) -> None:
         protocol: "DogStatsdProtocol" = DogStatsdProtocol().increment(key, value, tag_dict)
         self.send_dog_statsd(protocol, sample_rate)
 
     def decrement(
         self, key: str, value: int, sample_rate: Union[int, float, None] = None, tag_dict: Optional[dict] = None
-    ) -> NoReturn:
+    ) -> None:
         protocol: "DogStatsdProtocol" = DogStatsdProtocol().decrement(key, value, tag_dict)
         self.send_dog_statsd(protocol, sample_rate)
 
     def timer(
         self,
         key: str,
-        value: Union[int, float],
+        value: int,
         sample_rate: Union[int, float, None] = None,
         tag_dict: Optional[dict] = None,
-    ) -> NoReturn:
+    ) -> None:
         protocol: "DogStatsdProtocol" = DogStatsdProtocol().timer(key, value, tag_dict)
         self.send_dog_statsd(protocol, sample_rate)
 
@@ -310,30 +312,30 @@ class DogStatsdClient(Client):
     def histogram(
         self,
         key: str,
-        value: Union[int, float],
+        value: NUM_TYPE,
         sample_rate: Union[int, float, None] = None,
         tag_dict: Optional[dict] = None,
-    ) -> NoReturn:
+    ) -> None:
         protocol: "DogStatsdProtocol" = DogStatsdProtocol().histogram(key, value, tag_dict)
         self.send_dog_statsd(protocol, sample_rate)
 
     def distribution(
         self,
         key: str,
-        value: Union[int, float],
+        value: NUM_TYPE,
         sample_rate: Union[int, float, None] = None,
         tag_dict: Optional[dict] = None,
-    ) -> NoReturn:
+    ) -> None:
         protocol: "DogStatsdProtocol" = DogStatsdProtocol().distribution(key, value, tag_dict)
         self.send_dog_statsd(protocol, sample_rate)
 
     def set(
         self,
         key: str,
-        value: Union[int, float],
+        value: NUM_TYPE,
         sample_rate: Union[int, float, None] = None,
         tag_dict: Optional[dict] = None,
-    ) -> NoReturn:
+    ) -> None:
         protocol: "DogStatsdProtocol" = DogStatsdProtocol().set(key, value, tag_dict)
         self.send_dog_statsd(protocol, sample_rate)
 
@@ -350,7 +352,7 @@ class TelegrafStatsdClient(Client):
         close_timeout: int = 5,
         create_timeout: int = 5,
         max_len: int = 10000,
-    ) -> NoReturn:
+    ) -> None:
         super().__init__(
             host=host,
             port=port,
@@ -365,9 +367,9 @@ class TelegrafStatsdClient(Client):
 
     def send_telegraf_statsd(
         self, telegraf_statsd_protocol: "TelegrafStatsdProtocol", sample_rate: Union[int, float, None] = None
-    ) -> NoReturn:
+    ) -> None:
         for msg in telegraf_statsd_protocol.get_msg_list():
-            sample_rate: Union[int, float] = sample_rate or self._sample_rate
+            sample_rate = sample_rate or self._sample_rate
             if sample_rate != 1 and random() > sample_rate:
                 msg += f"|@{sample_rate}"
             elif sample_rate != 1:
@@ -376,29 +378,29 @@ class TelegrafStatsdClient(Client):
 
     def gauge(
         self, key: str, value: int, sample_rate: Union[int, float, None] = None, tag_dict: Optional[dict] = None
-    ) -> NoReturn:
+    ) -> None:
         protocol: "TelegrafStatsdProtocol" = TelegrafStatsdProtocol().gauge(key, value, tag_dict)
         self.send_telegraf_statsd(protocol, sample_rate)
 
     def increment(
         self, key: str, value: int, sample_rate: Union[int, float, None] = None, tag_dict: Optional[dict] = None
-    ) -> NoReturn:
+    ) -> None:
         protocol: "TelegrafStatsdProtocol" = TelegrafStatsdProtocol().increment(key, value, tag_dict)
         self.send_telegraf_statsd(protocol, sample_rate)
 
     def decrement(
         self, key: str, value: int, sample_rate: Union[int, float, None] = None, tag_dict: Optional[dict] = None
-    ) -> NoReturn:
+    ) -> None:
         protocol: "TelegrafStatsdProtocol" = TelegrafStatsdProtocol().decrement(key, value, tag_dict)
         self.send_telegraf_statsd(protocol, sample_rate)
 
     def timer(
         self,
         key: str,
-        value: Union[int, float],
+        value: NUM_TYPE,
         sample_rate: Union[int, float, None] = None,
         tag_dict: Optional[dict] = None,
-    ) -> NoReturn:
+    ) -> None:
         protocol: "TelegrafStatsdProtocol" = TelegrafStatsdProtocol().timer(key, value, tag_dict)
         self.send_telegraf_statsd(protocol, sample_rate)
 
@@ -416,39 +418,39 @@ class TelegrafStatsdClient(Client):
     def histogram(
         self,
         key: str,
-        value: Union[int, float],
+        value: NUM_TYPE,
         sample_rate: Union[int, float, None] = None,
         tag_dict: Optional[dict] = None,
-    ) -> NoReturn:
+    ) -> None:
         protocol: "TelegrafStatsdProtocol" = TelegrafStatsdProtocol().histogram(key, value, tag_dict)
         self.send_telegraf_statsd(protocol, sample_rate)
 
     def distribution(
         self,
         key: str,
-        value: Union[int, float],
+        value: NUM_TYPE,
         sample_rate: Union[int, float, None] = None,
         tag_dict: Optional[dict] = None,
-    ) -> NoReturn:
+    ) -> None:
         protocol: "TelegrafStatsdProtocol" = TelegrafStatsdProtocol().distribution(key, value, tag_dict)
         self.send_telegraf_statsd(protocol, sample_rate)
 
     def set(
         self,
         key: str,
-        value: Union[int, float],
+        value: NUM_TYPE,
         sample_rate: Union[int, float, None] = None,
         tag_dict: Optional[dict] = None,
-    ) -> NoReturn:
+    ) -> None:
         protocol: "TelegrafStatsdProtocol" = TelegrafStatsdProtocol().set(key, value, tag_dict)
         self.send_telegraf_statsd(protocol, sample_rate)
 
     def counter(
         self,
         key: str,
-        value: Union[int, float],
+        value: NUM_TYPE,
         sample_rate: Union[int, float, None] = None,
         tag_dict: Optional[dict] = None,
-    ) -> NoReturn:
+    ) -> None:
         protocol: "TelegrafStatsdProtocol" = TelegrafStatsdProtocol().counter(key, value, tag_dict)
         self.send_telegraf_statsd(protocol, sample_rate)
