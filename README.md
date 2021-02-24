@@ -120,7 +120,7 @@ async def main():
 loop = asyncio.get_event_loop()
 loop.run_until_complete(main())
 ```
-#### DogStatsD
+#### TelegrafStatsd
 >Note: Not tested in production
 ```python
 import asyncio
@@ -153,6 +153,17 @@ async def main():
 
 loop = asyncio.get_event_loop()
 loop.run_until_complete(main())
+```
+#### Telegraf
+>Note: Not tested in production
+```Python
+import asyncio
+
+from aio_statsd import TelegrafClient
+
+async def main():
+    async with TelegrafClient() as client:
+        client.send_telegraf('test.key', {"field1": 100}, user_server_time=True)
 ```
 ### Use in web frameworks
 [fast_tools example](https://github.com/so1n/fast-tools/blob/master/example/statsd_middleware.py)

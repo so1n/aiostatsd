@@ -5,7 +5,7 @@ with open("README.md", "r") as fh:
 
 setuptools.setup(
     name="aio_statsd",
-    version="0.2.4",
+    version="0.2.5",
     author="so1n",
     author_email="so1n897046026@gmail.com",
     description="an asyncio-based client for send metric to StatsD, Graphite.carbon, TelegrafStatsD and DogStatsD.",

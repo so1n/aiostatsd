@@ -165,6 +165,99 @@ class GraphiteClient(Client):
         self.send(msg)
 
 
+class TelegrafClient(Client):
+    def __init__(
+        self,
+        host: str = "localhost",
+        port: int = 2003,
+        protocol: ProtocolFlag = ProtocolFlag.udp,
+        timeout: int = 0,
+        debug: bool = False,
+        close_timeout: int = 5,
+        create_timeout: int = 5,
+        max_len: int = 10000,
+        user_server_time: bool = False,
+        enable_replace_special: bool = False,
+    ) -> None:
+        super().__init__(
+            host=host,
+            port=port,
+            protocol=protocol,
+            timeout=timeout,
+            debug=debug,
+            close_timeout=close_timeout,
+            create_timeout=create_timeout,
+            max_len=max_len,
+        )
+        self._user_server_time: bool = user_server_time
+        self._enable_replace_special: bool = enable_replace_special
+
+    @staticmethod
+    def _replace_field_value(value: Any) -> str:
+        value_type = type(value)
+        if value_type is int:
+            return str(value) + "i"
+        elif value_type is str:
+            return f'"{value}"'
+        else:
+            return str(value)
+
+    @staticmethod
+    def _replace_special_str(value: str) -> str:
+        return value.replace(",", "\\,").replace(" ", "\\ ").replace("=", "\\=").replace('"', "\\")
+
+    def send_telegraf(
+            self,
+            key: str,
+            field_dict: Dict[str, Any],
+            tag_dict: Optional[Dict[str, str]] = None,
+            user_server_time: Optional[bool] = None,
+            enable_replace_special: Optional[bool] = None,
+    ) -> None:
+        if enable_replace_special is None:
+            enable_replace_special = self._enable_replace_special
+        if user_server_time is None:
+            user_server_time = self._user_server_time
+
+        tag_str: str = ""
+        if tag_dict:
+            if {"_field", "_measurement", "time"} & set(tag_dict.keys()):
+                raise RuntimeError(
+                    "Avoid using the reserved keys _field, _measurement, and time."
+                    " If reserved keys are included as a tag or field key, the associated point is discarded."
+                )
+            if enable_replace_special:
+                tag_str = "," + ",".join(
+                    [
+                        f"{self._replace_special_str(key)}={self._replace_special_str(value)}"
+                        for key, value in tag_dict.items()
+                    ]
+                )
+            else:
+                tag_str = "," + ",".join([f"{key}={value}" for key, value in tag_dict.items()])
+
+        if enable_replace_special:
+            field_str: str = " " + ",".join(
+                [
+                    f"{self._replace_special_str(key)}={self._replace_special_str(self._replace_field_value(value))}"
+                    for key, value in field_dict.items()
+                ]
+            )
+        else:
+            field_str = " " + ",".join(
+                [
+                    f"{key}={self._replace_field_value(value)}"
+                    for key, value in field_dict.items()
+                ]
+            )
+
+        msg: str = f"{key}{tag_str}{field_str}"
+
+        if not user_server_time:
+            msg += f" {int(time.time() * 1000 * 1000 * 1000)}"
+        self.send(msg)
+
+
 class StatsdClient(Client):
     def __init__(
         self,
