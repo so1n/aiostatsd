@@ -57,12 +57,12 @@ class Connection(object):
     def is_closed(self) -> bool:
         return self._connection.is_closed
 
-    def close(self):
+    def close(self) -> None:
         self._connection.close()
 
-    async def wait_closed(self):
+    async def wait_closed(self) -> None:
         await self._connection.wait_closed()
 
-    async def await_close(self):
+    async def await_close(self) -> None:
         await self._connection.await_close()
         logging.debug(f"close connection: {self._connection_info}")

@@ -50,8 +50,8 @@ class Client:
         await self.connect()
         return self
 
-    async def __aexit__(self, *args) -> None:
-        async def await_deque_empty():
+    async def __aexit__(self, *args: Any) -> None:
+        async def await_deque_empty() -> None:
             while True:
                 if not self._deque:
                     break
@@ -78,10 +78,10 @@ class Client:
             await self._listen_future
             self._listen_future = None
 
-    async def _close(self):
+    async def _close(self) -> None:
         self.is_closed = True
 
-        async def before_close():
+        async def before_close() -> None:
             while True:
                 value: Optional[str] = self._get_by_queue()
                 if value:
