@@ -27,7 +27,7 @@ class Client:
         close_timeout: int = 5,
         create_timeout: int = 5,
         max_len: int = 1000,
-    ):
+    ) -> None:
         self._queue_empty: "object" = object()
         self._max_len: int = max_len
         self._deque: Deque[str] = deque(maxlen=self._max_len)
@@ -207,12 +207,12 @@ class TelegrafClient(Client):
         return value.replace(",", "\\,").replace(" ", "\\ ").replace("=", "\\=").replace('"', "\\")
 
     def send_telegraf(
-            self,
-            key: str,
-            field_dict: Dict[str, Any],
-            tag_dict: Optional[Dict[str, str]] = None,
-            user_server_time: Optional[bool] = None,
-            enable_replace_special: Optional[bool] = None,
+        self,
+        key: str,
+        field_dict: Dict[str, Any],
+        tag_dict: Optional[Dict[str, str]] = None,
+        user_server_time: Optional[bool] = None,
+        enable_replace_special: Optional[bool] = None,
     ) -> None:
         if enable_replace_special is None:
             enable_replace_special = self._enable_replace_special
@@ -245,10 +245,7 @@ class TelegrafClient(Client):
             )
         else:
             field_str = " " + ",".join(
-                [
-                    f"{key}={self._replace_field_value(value)}"
-                    for key, value in field_dict.items()
-                ]
+                [f"{key}={self._replace_field_value(value)}" for key, value in field_dict.items()]
             )
 
         msg: str = f"{key}{tag_str}{field_str}"

@@ -1,3 +1,6 @@
+import asyncio
+from typing import AsyncGenerator
+
 import pytest
 
 import aio_statsd
@@ -6,7 +9,7 @@ pytestmark = pytest.mark.asyncio
 
 
 @pytest.fixture
-async def statsd_client():
+async def statsd_client() -> AsyncGenerator[aio_statsd.StatsdClient, None]:
     client: aio_statsd.StatsdClient = aio_statsd.StatsdClient(port=9999)
     await client.connect()
     yield client
@@ -14,21 +17,21 @@ async def statsd_client():
 
 
 class TestClient:
-    async def test_enable_debug(self, udp_server):
+    async def test_enable_debug(self, udp_server: asyncio.Queue) -> None:
         client: aio_statsd.StatsdClient = aio_statsd.StatsdClient(port=9999, debug=True)
         await client.connect()
         client.counter("test.key", 1)
         assert await udp_server.get() == b"test.key:1|c"
         await client.close()
 
-    async def test_tcp_server(self, tcp_server):
+    async def test_tcp_server(self, tcp_server: asyncio.Queue) -> None:
         client: aio_statsd.StatsdClient = aio_statsd.StatsdClient(port=9999, protocol=aio_statsd.ProtocolFlag.tcp)
         await client.connect()
         client.counter("test.key", 1)
         assert await tcp_server.get() == b"test.key:1|c"
         await client.close()
 
-    async def test_error_transport_layer_protocol(self):
+    async def test_error_transport_layer_protocol(self) -> None:
         with pytest.raises(ConnectionError) as e:
             client: aio_statsd.StatsdClient = aio_statsd.StatsdClient(port=9999, protocol="error")
             await client.connect()
@@ -36,14 +39,14 @@ class TestClient:
         exec_msg = e.value.args[0]
         assert exec_msg == "Not support protocol:error"
 
-    async def test_client_already_connected(self, statsd_client: aio_statsd.StatsdClient):
+    async def test_client_already_connected(self, statsd_client: aio_statsd.StatsdClient) -> None:
         with pytest.raises(ConnectionError) as e:
             await statsd_client.connect()
 
         exec_msg = e.value.args[0]
         assert exec_msg == "aiostatsd client already connected"
 
-    async def test_client_context_manager(self, udp_server):
+    async def test_client_context_manager(self, udp_server: asyncio.Queue) -> None:
         async with aio_statsd.StatsdClient(port=9999) as client:
             client.counter("test.key", 1)
             assert await udp_server.get() == b"test.key:1|c"
@@ -52,7 +55,7 @@ class TestClient:
             for i in range(100000):
                 client.counter("test.key", i)
 
-    async def test_protocol_send_msg_timeout(self):
+    async def test_protocol_send_msg_timeout(self) -> None:
         """TODO ...."""
         client: aio_statsd.StatsdClient = aio_statsd.StatsdClient(port=9999, timeout=1)
         await client.connect()

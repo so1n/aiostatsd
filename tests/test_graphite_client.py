@@ -1,4 +1,6 @@
+import asyncio
 import time
+from typing import AsyncGenerator
 
 import pytest
 
@@ -8,7 +10,7 @@ pytestmark = pytest.mark.asyncio
 
 
 @pytest.fixture
-async def graphite_client():
+async def graphite_client() -> AsyncGenerator[aio_statsd.GraphiteClient, None]:
     client: aio_statsd.GraphiteClient = aio_statsd.GraphiteClient(port=9999)
     await client.connect()
     yield client
@@ -16,7 +18,7 @@ async def graphite_client():
 
 
 class TestGraphiteClient:
-    async def test_send(self, graphite_client: aio_statsd.GraphiteClient, udp_server):
+    async def test_send(self, graphite_client: aio_statsd.GraphiteClient, udp_server: asyncio.Queue) -> None:
         now_timestamp: int = int(time.time())
         interval: int = 10
         timestamp: int = int(now_timestamp) // interval * interval

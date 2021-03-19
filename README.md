@@ -161,6 +161,7 @@ import asyncio
 
 from aio_statsd import TelegrafClient
 
+
 async def main():
     async with TelegrafClient() as client:
         client.send_telegraf('test.key', {"field1": 100}, user_server_time=True)
