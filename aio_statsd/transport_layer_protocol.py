@@ -18,9 +18,6 @@ class ProtocolFlag(Enum):
     def __str__(self) -> str:
         return "%s" % self._name_
 
-    def __repr__(self) -> str:
-        return "%s" % self._name_
-
 
 class _ProtocolMixin(asyncio.BaseProtocol):
     def __init__(self, timeout: int = 0) -> None:

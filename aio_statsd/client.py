@@ -312,6 +312,14 @@ class StatsdClient(Client):
         statsd_protocol: "StatsdProtocol" = StatsdProtocol().sets(key, value)
         self.send_statsd(statsd_protocol, sample_rate)
 
+    def increment(self, key: str, value: int, sample_rate: Union[int, float, None] = None) -> None:
+        statsd_protocol: "StatsdProtocol" = StatsdProtocol().increment(key, value)
+        self.send_statsd(statsd_protocol, sample_rate)
+
+    def decrement(self, key: str, value: int, sample_rate: Union[int, float, None] = None) -> None:
+        statsd_protocol: "StatsdProtocol" = StatsdProtocol().decrement(key, value)
+        self.send_statsd(statsd_protocol, sample_rate)
+
     @contextmanager
     def timeit(self, key: str, sample_rate: Union[int, float, None] = None) -> Iterator[None]:
         """

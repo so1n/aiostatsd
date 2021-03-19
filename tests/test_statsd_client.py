@@ -33,6 +33,14 @@ class TestStatsdClient:
         statsd_client.timer("test.key", 1)
         assert await udp_server.get() == b"test.key:1|ms"
 
+    async def test_increment(self, statsd_client: aio_statsd.StatsdClient, udp_server: asyncio.Queue) -> None:
+        statsd_client.increment("test.key", 1)
+        assert await udp_server.get() == b"test.key:+1|g"
+
+    async def test_decrement(self, statsd_client: aio_statsd.StatsdClient, udp_server: asyncio.Queue) -> None:
+        statsd_client.decrement("test.key", 1)
+        assert await udp_server.get() == b"test.key:-1|g"
+        
     async def test_timeit(self, mocker: Any, statsd_client: aio_statsd.StatsdClient, udp_server: asyncio.Queue) -> None:
         loop = mocker.patch("aio_statsd.client.get_event_loop")
         loop.return_value.time.return_value = 1.0

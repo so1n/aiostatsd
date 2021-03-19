@@ -25,7 +25,9 @@ class TestClient:
         await client.close()
 
     async def test_tcp_server(self, tcp_server: asyncio.Queue) -> None:
-        client: aio_statsd.StatsdClient = aio_statsd.StatsdClient(port=9999, protocol=aio_statsd.ProtocolFlag.tcp)
+        client: aio_statsd.StatsdClient = aio_statsd.StatsdClient(
+            port=9999, protocol=aio_statsd.ProtocolFlag.tcp, timeout=9
+        )
         await client.connect()
         client.counter("test.key", 1)
         assert await tcp_server.get() == b"test.key:1|c"

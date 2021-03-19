@@ -26,8 +26,12 @@ async def tcp_server() -> AsyncGenerator[asyncio.Queue, None]:
     result_queue: asyncio.Queue = asyncio.Queue()
 
     class ServerProtocol(asyncio.Protocol):
+        def connection_made(self, transport) -> None:
+            self.transport = transport
+
         def data_received(self, data: bytes) -> None:
             result_queue.put_nowait(data)
+            self.transport.write(data)
 
     loop: asyncio.AbstractEventLoop = asyncio.get_event_loop()
 
