@@ -22,7 +22,8 @@ class ProtocolFlag(Enum):
 class _ProtocolMixin(asyncio.BaseProtocol):
     def __init__(self, timeout: int = 0) -> None:
         self._transport: Optional[asyncio.BaseTransport] = None
-        self._future: Optional[asyncio.Future] = None
+        self.future: asyncio.Future = asyncio.Future()
+        self.future.set_result(True)
 
         self._before_event: List[Callable] = []
         self._after_event: List[Callable] = []
@@ -42,7 +43,10 @@ class _ProtocolMixin(asyncio.BaseProtocol):
 
     def create_keep_alive(self) -> None:
         def timeout_handle() -> NoReturn:
-            raise asyncio.TimeoutError(f"No response data received within {self._timeout} seconds")
+            e: Exception = asyncio.TimeoutError(f"No response data received within {self._timeout} seconds")
+            if not self.future.done():
+                self.future.set_exception(e)
+            raise e
 
         self._keep_alive_future = self._loop.call_later(self._timeout, timeout_handle)
 
@@ -51,36 +55,39 @@ class _ProtocolMixin(asyncio.BaseProtocol):
         await self.wait_closed()
 
     async def wait_closed(self) -> None:
-        if self._future:
-            await self._future
+        if self.future:
+            await self.future
         else:
             await asyncio.sleep(0)
 
     def close(self) -> None:
-        if self._transport is None:
-            return
-
+        if not self.future.done():
+            self.future.set_result(True)
         if self._keep_alive_future and self._keep_alive_future.cancelled():
             self._keep_alive_future.cancel()
-        if not self._transport.is_closing():
+
+        if self._transport is None:
+            return
+        elif not self._transport.is_closing():
             self._transport.close()
             self._transport = None
 
     @property
     def is_closed(self) -> bool:
-        if not self._future:
-            return True
-        return self._future.done()
+        return self.future.done()
 
     def connection_made(self, transport: asyncio.BaseTransport) -> None:
         self._transport = transport
-        self._future = asyncio.Future()
+        if not self.future.done():
+            self.future.cancelled()
+        self.future = asyncio.Future()
 
     def connection_lost(self, _exc: Optional[Exception]) -> None:
-        if self._future:
-            if self._future.done():
-                return
-            self._future.set_result(True)
+        if not self.future.done():
+            if _exc:
+                self.future.set_exception(_exc)
+            else:
+                self.future.set_result(True)
         if _exc:
             raise ConnectionError from _exc
 
@@ -176,8 +183,8 @@ class DatagramProtocol(asyncio.DatagramProtocol, _ProtocolMixin):
         self.after_transport(data, peer_name)
 
     def error_received(self, exc: Exception) -> None:
+        self.future.set_exception(exc)
         self.close()
-        raise exc
 
     def send(self, data: bytes) -> None:
         self.before_transport()

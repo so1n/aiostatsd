@@ -65,12 +65,12 @@ class Client:
 
     async def connect(self) -> None:
         if not self.is_closed:
-            raise ConnectionError(f"aiostatsd client already connected")
+            raise ConnectionError(f"{self.__class__.__name__} already connected")
         await self.connection.connect()
         self._deque = deque(maxlen=self._max_len)
         self.is_closed = False
         self._listen_future = asyncio.ensure_future(self._listen())
-        logging.info(f"create aiostatsd client{self}")
+        logging.info(f"create {self.__class__.__name__}")
 
     async def close(self) -> None:
         self.is_closed = True
@@ -111,8 +111,12 @@ class Client:
                     await self._real_send(value)
                 else:
                     await asyncio.sleep(0.01)
+
+                if self.connection.future.done():
+                    await self.connection.future
+                    self.is_closed = self.connection.is_closed
         except Exception as e:
-            logging.error(f"aiostatsd listen status:{self.is_closed} error: {e}")
+            logging.error(f"status:{self.is_closed} error: {e}")
         finally:
             await self._close()
 
@@ -128,11 +132,13 @@ class Client:
                 logging.error(f"send msd error:{e}, drop msg:{msg}")
 
     def send(self, msg: str) -> None:
+        if self.is_closed:
+            raise ConnectionError(f"{self.__class__.__name__} already close.")
         try:
             # if queue full, auto del last value(queue[-1])
             self._deque.appendleft(msg)
         except Exception as e:
-            logging.error(f"aiostatsd put:{msg} to queue error:{e}")
+            logging.error(f"put:{msg} to queue error:{e}")
 
 
 class GraphiteClient(Client):

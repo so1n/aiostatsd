@@ -14,7 +14,7 @@ async def udp_server() -> AsyncGenerator[asyncio.Queue, None]:
 
     loop: asyncio.AbstractEventLoop = asyncio.get_event_loop()
 
-    transport, protocol = await loop.create_datagram_endpoint(lambda: ServerProtocol(), local_addr=("127.0.0.1", 9999))
+    transport, protocol = await loop.create_datagram_endpoint(lambda: ServerProtocol(), local_addr=("localhost", 9999))
 
     yield result_queue
 
@@ -35,7 +35,7 @@ async def tcp_server() -> AsyncGenerator[asyncio.Queue, None]:
 
     loop: asyncio.AbstractEventLoop = asyncio.get_event_loop()
 
-    server = await loop.create_server(lambda: ServerProtocol(), "127.0.0.1", 9999)
+    server = await loop.create_server(lambda: ServerProtocol(), "localhost", 9999)
 
     yield result_queue
 
