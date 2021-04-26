@@ -1,11 +1,11 @@
-import setuptools
+import setuptools  # type: ignore
 
 with open("README.md", "r") as fh:
     long_description = fh.read()
 
 setuptools.setup(
     name="aio_statsd",
-    version="0.2.5",
+    version="0.2.6",
     author="so1n",
     author_email="so1n897046026@gmail.com",
     description="an asyncio-based client for send metric to StatsD, Graphite.carbon, TelegrafStatsD and DogStatsD.",
