@@ -24,43 +24,34 @@ class Client:
         protocol: ProtocolFlag = ProtocolFlag.udp,
         timeout: int = 0,
         debug: bool = False,
-        close_timeout: int = 5,
-        create_timeout: int = 5,
+        close_timeout: int = 9,
+        create_timeout: int = 9,
+        keep_alive_timeout: int = 1200,
         max_len: int = 1000,
     ) -> None:
         self._queue_empty: "object" = object()
         self._max_len: int = max_len
         self._deque: Deque[str] = deque(maxlen=self._max_len)
-        self._listen_future: Optional[asyncio.Future] = None
+        self._listen_future: asyncio.Future = asyncio.Future()
+        self._listen_future.set_result(True)
 
-        self.is_closed: bool = True
         self._close_timeout: int = close_timeout
-        self._conn_config_dict: Dict[str, Any] = {
-            "host": host,
-            "port": port,
-            "protocol_flag": protocol,
-            "debug": debug,
-            "timeout": timeout,
-            "create_timeout": create_timeout,
-        }
 
-        self.connection: Connection = Connection(**self._conn_config_dict)
+        self.connection: Connection = Connection(
+            host=host,
+            port=port,
+            protocol_flag=protocol,
+            debug=debug,
+            timeout=timeout,
+            create_timeout=create_timeout,
+            keep_alive_timeout=keep_alive_timeout
+        )
 
     async def __aenter__(self) -> "Client":
         await self.connect()
         return self
 
     async def __aexit__(self, *args: Any) -> None:
-        async def await_deque_empty() -> None:
-            while True:
-                if not self._deque:
-                    break
-                await asyncio.sleep(0.1)
-
-        try:
-            await asyncio.wait_for(await_deque_empty(), 9)
-        except asyncio.TimeoutError:
-            pass
         await self.close()
 
     async def connect(self) -> None:
@@ -68,57 +59,55 @@ class Client:
             raise ConnectionError(f"{self.__class__.__name__} already connected")
         await self.connection.connect()
         self._deque = deque(maxlen=self._max_len)
-        self.is_closed = False
         self._listen_future = asyncio.ensure_future(self._listen())
         logging.info(f"create {self.__class__.__name__}")
 
+    @property
+    def is_closed(self) -> bool:
+        return self._listen_future.done()
+
     async def close(self) -> None:
-        self.is_closed = True
-        if self._listen_future:
-            await self._listen_future
-            self._listen_future = None
+        if not self.connection.is_closed:
+            async def wait_send_msg() -> None:
+                while len(self._deque) > 0:
+                    await asyncio.sleep(0.1)
+            try:
+                await asyncio.wait_for(wait_send_msg(), timeout=self._close_timeout)
+            except asyncio.TimeoutError:
+                pass
+            await self.connection.await_close()
 
-    async def _close(self) -> None:
-        self.is_closed = True
-
-        async def before_close() -> None:
-            while True:
-                value: Optional[str] = self._get_by_queue()
-                if value:
-                    await self._real_send(value)
-                else:
-                    break
-
+        self._deque.clear()
+        if not self._listen_future.cancelled():
+            self._listen_future.cancel()
         try:
-            await asyncio.wait_for(before_close(), timeout=self._close_timeout)
-        except asyncio.TimeoutError:
+            await self._listen_future
+        except asyncio.CancelledError:
             pass
-        await self.connection.await_close()
 
     def _get_by_queue(self) -> Optional[str]:
         try:
             if self._deque:
                 return self._deque.pop()
-            return None
         except IndexError:
-            return None
+            pass
+        return None
 
     async def _listen(self) -> None:
         try:
-            while not self.is_closed:
+            while not self.connection.is_closed:
                 value: Optional[str] = self._get_by_queue()
                 if value:
                     await self._real_send(value)
                 else:
-                    await asyncio.sleep(0.01)
+                    await asyncio.sleep(0.05)
 
                 if self.connection.future.done():
                     await self.connection.future
-                    self.is_closed = self.connection.is_closed
+        except asyncio.CancelledError:
+            pass
         except Exception as e:
             logging.error(f"status:{self.is_closed} error: {e}")
-        finally:
-            await self._close()
 
     async def _real_send(self, msg: str) -> None:
         try:
