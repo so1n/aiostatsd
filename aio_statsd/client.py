@@ -26,7 +26,6 @@ class Client:
         debug: bool = False,
         close_timeout: int = 9,
         create_timeout: int = 9,
-        keep_alive_timeout: int = 1200,
         max_len: int = 1000,
     ) -> None:
         self._queue_empty: "object" = object()
@@ -44,7 +43,6 @@ class Client:
             debug=debug,
             timeout=timeout,
             create_timeout=create_timeout,
-            keep_alive_timeout=keep_alive_timeout
         )
 
     async def __aenter__(self) -> "Client":
@@ -107,7 +105,7 @@ class Client:
         except asyncio.CancelledError:
             pass
         except Exception as e:
-            logging.error(f"status:{self.is_closed} error: {e}")
+            logging.exception(f"status:{self.is_closed} error: {e}")
 
     async def _real_send(self, msg: str) -> None:
         try:
@@ -153,8 +151,10 @@ class GraphiteClient(Client):
             max_len=max_len,
         )
 
-    def send_graphite(self, key: str, value: int = 0, timestamp: int = int(time.time()), interval: int = 10) -> None:
+    def send_graphite(self, key: str, value: int = 0, timestamp: Optional[int] = None, interval: int = 10) -> None:
         """interval: Multiple clients timestamp interval synchronization"""
+        if not timestamp:
+            timestamp = int(time.time())
         timestamp = int(timestamp) // interval * interval
         msg: str = "{} {} {}".format(key, value, timestamp)
         self.send(msg)
@@ -263,6 +263,8 @@ class StatsdClient(Client):
         create_timeout: int = 5,
         max_len: int = 10000,
     ) -> None:
+        if protocol == ProtocolFlag.tcp:
+            raise ValueError(f"{self.__class__.__name__} not support {protocol.value} protocol")
         super().__init__(
             host=host,
             port=port,

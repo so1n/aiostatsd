@@ -19,7 +19,6 @@ class Connection(object):
         debug: bool,
         timeout: int,
         create_timeout: int,
-        keep_alive_timeout: int
     ):
         self._debug: bool = debug
         self._protocol_flag: ProtocolFlag = protocol_flag

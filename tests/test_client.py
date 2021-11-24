@@ -25,12 +25,12 @@ class TestClient:
         await client.close()
 
     async def test_tcp_server(self, tcp_server: asyncio.Queue) -> None:
-        client: aio_statsd.StatsdClient = aio_statsd.StatsdClient(
+        client: aio_statsd.GraphiteClient = aio_statsd.GraphiteClient(
             port=9999, protocol=aio_statsd.ProtocolFlag.tcp, timeout=9
         )
         await client.connect()
-        client.counter("test.key", 1)
-        assert await tcp_server.get() == b"test.key:1|c"
+        client.send("test")
+        assert await tcp_server.get() == b"test"
         await client.close()
 
     async def test_error_transport_layer_protocol(self) -> None:
