@@ -10,6 +10,9 @@ from aio_statsd.transport_layer_protocol import DatagramProtocol, ProtocolFlag, 
 from aio_statsd.utlis import get_event_loop
 
 
+logger: logging.Logger = logging.getLogger(__name__)
+
+
 class Connection(object):
     def __init__(
         self,
@@ -49,7 +52,7 @@ class Connection(object):
             await asyncio.wait_for(connection_proxy, timeout=self._create_timeout)
         except asyncio.TimeoutError as e:
             raise TimeoutError(f"create connection:{self._connection_info} timeout") from e
-        logging.debug(f"create connection:{self._connection_info}")
+        logger.debug(f"create connection:{self._connection_info}")
 
     def _sendto(self, data: str) -> None:
         if not self.is_closed:
@@ -57,7 +60,7 @@ class Connection(object):
 
     def _sendto_debug(self, data: str) -> None:
         if not self.is_closed:
-            logging.debug(f"send msg:{data}")
+            logger.debug(f"send msg:{data}")
             self._connection.send(bytes(data, encoding="utf8"))
 
     @property
@@ -76,4 +79,4 @@ class Connection(object):
 
     async def await_close(self) -> None:
         await self._connection.await_close()
-        logging.debug(f"close connection: {self._connection_info}")
+        logger.debug(f"close connection: {self._connection_info}")

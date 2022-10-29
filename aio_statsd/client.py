@@ -16,6 +16,9 @@ from aio_statsd.transport_layer_protocol import ProtocolFlag
 from aio_statsd.utlis import NUM_TYPE, get_event_loop
 
 
+logger: logging.Logger = logging.getLogger(__name__)
+
+
 class Client:
     def __init__(
         self,
@@ -58,7 +61,7 @@ class Client:
         await self.connection.connect()
         self._deque = deque(maxlen=self._max_len)
         self._listen_future = asyncio.ensure_future(self._listen())
-        logging.info(f"create {self.__class__.__name__}")
+        logger.info(f"create {self.__class__.__name__}")
 
     @property
     def is_closed(self) -> bool:
@@ -105,18 +108,18 @@ class Client:
         except asyncio.CancelledError:
             pass
         except Exception as e:
-            logging.exception(f"status:{self.is_closed} error: {e}")
+            logger.exception(f"status:{self.is_closed} error: {e}")
 
     async def _real_send(self, msg: str) -> None:
         try:
             self.connection.sendto(msg)
         except Exception as e:
-            logging.error(f"connection:{self.connection}")
+            logger.error(f"connection:{self.connection}")
             if len(self._deque) < (self._deque.maxlen or 0) * 0.9:
                 self._deque.append(msg)
                 await asyncio.sleep(1)
             else:
-                logging.error(f"send msd error:{e}, drop msg:{msg}")
+                logger.error(f"send msd error:{e}, drop msg:{msg}")
 
     def send(self, msg: str) -> None:
         if self.is_closed:
@@ -125,7 +128,7 @@ class Client:
             # if queue full, auto del last value(queue[-1])
             self._deque.appendleft(msg)
         except Exception as e:
-            logging.error(f"put:{msg} to queue error:{e}")
+            logger.error(f"put:{msg} to queue error:{e}")
 
 
 class GraphiteClient(Client):
@@ -281,10 +284,10 @@ class StatsdClient(Client):
         msg: str = statsd_protocol.msg
         sample_rate = sample_rate or self._sample_rate
         if "\n" in msg and sample_rate:
-            logging.warning("Multi-Metric not support sample rate")
+            logger.warning("Multi-Metric not support sample rate")
 
         if sample_rate > 1:
-            logging.warning("sample rate must > 0 & < 1")
+            logger.warning("sample rate must > 0 & < 1")
             return
 
         if sample_rate != 1 and random() > sample_rate:

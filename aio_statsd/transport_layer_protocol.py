@@ -8,7 +8,7 @@ from enum import Enum
 from typing import Any, Callable, List, NoReturn, Optional, Tuple
 
 __all__ = ["ProtocolFlag", "TcpProtocol", "DatagramProtocol"]
-logger = logging.getLogger()
+logger = logging.getLogger(__name__)
 
 
 class ProtocolFlag(Enum):
