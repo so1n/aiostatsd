@@ -17,9 +17,12 @@ class StatsdProtocol(object):
         self.msg: str = ""
         self._mtu_limit: int = mtu_limit
 
-    def _msg_handle(self, msg: str) -> "StatsdProtocol":
+    def _msg_handle(self, key: str, value: Union[str, int], type_: str) -> "StatsdProtocol":
         if self._prefix:
-            msg = self._prefix + "." + msg
+            msg = self._prefix + "." + key + ":" + str(value) + "|" + type_
+        else:
+            msg = key + ":" + str(value) + "|" + type_
+
         if self.msg == "":
             self.msg = msg
         else:
@@ -27,27 +30,27 @@ class StatsdProtocol(object):
         if len(self.msg) > self._mtu_limit:
             raise RuntimeError(
                 f"msg:{msg} length:{len(self.msg)} > mtu max length limit:{self._mtu_limit}"
-                f"learn more:https://github.com/statsd/statsd/blob/master/docs/metric_types.md"
+                f"learn more:https://github.com/statsd/statsd/blob/master/docs/metric_types.md#multi-metric-packets"
             )
         return self
 
-    def counter(self, key: str, value: NUM_TYPE) -> "StatsdProtocol":
-        return self._msg_handle(f"{key}:{value}|c")
+    def counter(self, key: str, value: int) -> "StatsdProtocol":
+        return self._msg_handle(key, value, "c")
 
-    def timer(self, key: str, value: NUM_TYPE) -> "StatsdProtocol":
-        return self._msg_handle(f"{key}:{value}|ms")
+    def timer(self, key: str, value: int) -> "StatsdProtocol":
+        return self._msg_handle(key, value, "ms")
 
-    def gauge(self, key: str, value: NUM_TYPE) -> "StatsdProtocol":
-        return self._msg_handle(f"{key}:{value}|g")
+    def gauge(self, key: str, value: int) -> "StatsdProtocol":
+        return self._msg_handle(key, value, "g")
 
-    def increment(self, key: str, value: NUM_TYPE) -> "StatsdProtocol":
-        return self._msg_handle(f"{key}:+{value}|g")
+    def increment(self, key: str, value: int) -> "StatsdProtocol":
+        return self._msg_handle(key, "+" + str(value), "g")
 
-    def decrement(self, key: str, value: NUM_TYPE) -> "StatsdProtocol":
-        return self._msg_handle(f"{key}:-{value}|g")
+    def decrement(self, key: str, value: int) -> "StatsdProtocol":
+        return self._msg_handle(key, -value, "g")
 
     def sets(self, key: str, value: NUM_TYPE) -> "StatsdProtocol":
-        return self._msg_handle(f"{key}:{value}|s")
+        return self._msg_handle(key, value, "s")
 
 
 class DogStatsdProtocol(object):
